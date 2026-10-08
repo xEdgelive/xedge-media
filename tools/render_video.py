@@ -650,7 +650,7 @@ const U = {
     tot.style.opacity=EO(P(t,tb-0.12,0.3)); tot.textContent=fmt(sc.totalNum,g);
     const bar=$('.bar',el); if(!bar) return;
     rise(bar,EO(P(t,sc.t0+0.35,0.5)),24);
-    const max=Math.max(110,Math.ceil(sc.totalNum.num/10)*10+5), Wd=bar.clientWidth;
+    const max=Math.max(100,sc.totalNum.num), Wd=bar.clientWidth;  // the bar ends at the total, or at 100% if the total is lower
     const cur=sc.totalNum.num*g;
     $('.f1',bar).style.width=(Math.min(cur,100)/max*Wd)+'px';
     const f2=$('.f2',bar); f2.style.left=(100/max*Wd)+'px'; f2.style.width=(Math.max(0,cur-100)/max*Wd)+'px';
@@ -658,7 +658,7 @@ const U = {
     const ml=$('.mlab',bar); ml.style.left=(100/max*Wd+2)+'px'; ml.style.opacity=EO(P(t,beat(sc,1,tb+0.9)-0.1,0.4));
     const ol=$('.olab',bar);
     if(sc.totalNum.num>100){ ol.textContent='+'+(sc.totalNum.num-100).toFixed(sc.totalNum.dec)+'%';
-      ol.style.left=((100+(sc.totalNum.num-100)/2)/max*Wd)+'px'; ol.style.opacity=EO(P(t,tb+0.75,0.35)); } else ol.style.opacity=0;
+      ol.style.left=Math.min((100+(sc.totalNum.num-100)/2)/max*Wd, Wd-ol.offsetWidth/2)+'px'; ol.style.opacity=EO(P(t,tb+0.75,0.35)); } else ol.style.opacity=0;
   },
   number(sc,el,t){
     rise($('.kicker',el),EO(P(t,sc.t0,0.5)),20);
@@ -867,6 +867,22 @@ def build_track(clips: list, total: float, out: pathlib.Path) -> None:
 
 # ---------------------------------------------------------------- render
 
+LOUDNESS = "I=-14:TP=-1.5:LRA=11"  # -14 LUFS, the level TikTok, Reels and Shorts play voice at
+
+
+def loudnorm_filter(audio: pathlib.Path) -> str:
+    """Measure the voice track first, then normalise it with those figures (two passes). A single pass lands
+    2 to 3 dB short on a 30-second voiceover, because it has to guess the level as it goes."""
+    r = subprocess.run([ffmpeg_bin(), "-hide_banner", "-nostats", "-i", str(audio), "-af",
+                        f"loudnorm={LOUDNESS}:print_format=json", "-f", "null", "-"], capture_output=True, text=True)
+    m = re.search(r"\{[^{}]*\"input_i\"[^{}]*\}", r.stderr)
+    if r.returncode != 0 or not m:
+        return f"loudnorm={LOUDNESS}"
+    j = json.loads(m.group(0))
+    return (f"loudnorm={LOUDNESS}:measured_I={j['input_i']}:measured_TP={j['input_tp']}:measured_LRA={j['input_lra']}"
+            f":measured_thresh={j['input_thresh']}:offset={j['target_offset']}:linear=true")
+
+
 def render(spec: dict, tl: dict, out_mp4: pathlib.Path, cover: pathlib.Path, audio: pathlib.Path | None) -> None:
     data = {"scenes": tl["scenes"], "caps": tl["caps"], "total": tl["total"]}
     frames = int(math.ceil(tl["total"] * FPS))
@@ -888,7 +904,7 @@ def render(spec: dict, tl: dict, out_mp4: pathlib.Path, cover: pathlib.Path, aud
             vf = "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p"
             cmd = [ffmpeg_bin(), "-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", str(FPS), "-c:v", "png", "-i", "-"]
             if audio:
-                cmd += ["-i", str(audio), "-filter:a", "loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000", "-c:a", "aac", "-b:a", "160k", "-ar", str(SR), "-ac", "2"]
+                cmd += ["-i", str(audio), "-filter:a", loudnorm_filter(audio) + ",aresample=48000", "-c:a", "aac", "-b:a", "160k", "-ar", str(SR), "-ac", "2"]
             else:
                 cmd += ["-f", "lavfi", "-i", f"anullsrc=r={SR}:cl=stereo", "-c:a", "aac", "-b:a", "96k", "-shortest"]
             cmd += ["-filter:v", vf, "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-profile:v", "high", "-level", "4.2",
