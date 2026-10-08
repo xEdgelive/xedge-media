@@ -38,6 +38,8 @@ The scene types (hook, text, prices, sum, number, compare, list, checker and end
 
 The voice comes from ElevenLabs. Its API key is stored as an API credential on the Claude cloud environment, for `api.elevenlabs.io`, so it is never in this repo, a file or a command. Voice clips are cached in the work folder, so a re-render costs no credits. A 30-second video uses about 400 characters of voice.
 
+It needs Python with `playwright` and `pillow`, a Chromium browser and ffmpeg. Where Playwright's own browser download is blocked, fetch Chrome for Testing with `npx -y @puppeteer/browsers install chrome-headless-shell@stable` and set `XEDGE_CHROMIUM` to its binary; set `XEDGE_FFMPEG` if ffmpeg isn't on the path (or `pip install imageio-ffmpeg`).
+
 ## Rules for this repo
 
 - Keep it to finished images and videos, the tools that make them and brand files. No raw odds, price snapshots or figure files: The Odds API's terms don't allow redistributing its data as downloadable files.

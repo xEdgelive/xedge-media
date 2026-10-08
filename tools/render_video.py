@@ -49,6 +49,7 @@ import hashlib
 import html
 import json
 import math
+import os
 import pathlib
 import re
 import shutil
@@ -68,6 +69,20 @@ from render_carousel import BANNED, BOOKMAKERS, WARN  # noqa: E402  (same wordin
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 W, H, FPS, SR = 1080, 1920, 30, 48000
+# Where there's no Playwright browser or system ffmpeg (a fresh cloud environment), point these at
+# a Chrome / chrome-headless-shell binary and an ffmpeg binary.
+CHROMIUM = os.environ.get("XEDGE_CHROMIUM") or None
+
+
+def ffmpeg_bin() -> str:
+    found = os.environ.get("XEDGE_FFMPEG") or shutil.which("ffmpeg")
+    if found:
+        return found
+    try:
+        import imageio_ffmpeg
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except ImportError:
+        sys.exit("ffmpeg not found: install it (apt-get install -y ffmpeg, or pip install imageio-ffmpeg) or set XEDGE_FFMPEG")
 DEFAULT_VOICE = {"voice_id": "onwK4e9ZLuTAKqWW03F9", "model_id": "eleven_multilingual_v2", "speed": 1.0,
                  "stability": 0.5, "similarity_boost": 0.75, "style": 0.0}
 LEAD, PRE, GAP, END_HOLD = 0.25, 0.15, 0.35, 3.2
@@ -322,7 +337,7 @@ def tts(text: str, prev_text: str, next_text: str, voice: dict, cache: pathlib.P
 
 
 def decode(mp3: pathlib.Path, out: pathlib.Path) -> float:
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(mp3), "-ac", "1", "-ar", str(SR),
+    subprocess.run([ffmpeg_bin(), "-y", "-loglevel", "error", "-i", str(mp3), "-ac", "1", "-ar", str(SR),
                     "-c:a", "pcm_s16le", str(out)], check=True)
     with wave.open(str(out)) as w:
         return w.getnframes() / SR
@@ -786,7 +801,7 @@ def render(spec: dict, tl: dict, out_mp4: pathlib.Path, cover: pathlib.Path, aud
         html_path = pathlib.Path(tmp.name)
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch()
+            browser = p.chromium.launch(executable_path=CHROMIUM)
             page = browser.new_page(viewport={"width": W, "height": H}, device_scale_factor=1)
             page.goto(html_path.as_uri())
             page.evaluate("document.fonts.ready")
@@ -797,7 +812,7 @@ def render(spec: dict, tl: dict, out_mp4: pathlib.Path, cover: pathlib.Path, aud
             if bad:
                 sys.exit("Refusing to render, text doesn't fit:\n- " + "\n- ".join(bad))
             vf = "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p"
-            cmd = ["ffmpeg", "-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", str(FPS), "-c:v", "png", "-i", "-"]
+            cmd = [ffmpeg_bin(), "-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", str(FPS), "-c:v", "png", "-i", "-"]
             if audio:
                 cmd += ["-i", str(audio), "-filter:a", "loudnorm=I=-14:TP=-1.5:LRA=11,aresample=48000", "-c:a", "aac", "-b:a", "160k", "-ar", str(SR), "-ac", "2"]
             else:
@@ -832,7 +847,7 @@ def stills(spec: dict, tl: dict, times: list) -> list:
         html_path = pathlib.Path(tmp.name)
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch()
+            browser = p.chromium.launch(executable_path=CHROMIUM)
             page = browser.new_page(viewport={"width": W, "height": H}, device_scale_factor=1)
             page.goto(html_path.as_uri())
             page.evaluate("document.fonts.ready")
