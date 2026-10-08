@@ -41,6 +41,9 @@ import tempfile
 from PIL import Image
 from playwright.sync_api import sync_playwright
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from chromium import launch as launch_chromium  # noqa: E402
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 W, H = 1080, 1350
 
@@ -298,7 +301,7 @@ def render_into(slides: list, paths: list) -> None:
     tmp_files = []
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch()
+            browser = launch_chromium(p)
             page = browser.new_page(viewport={"width": W, "height": H}, device_scale_factor=2)
             for n, (s, out_path) in enumerate(zip(slides, paths), 1):
                 with tempfile.NamedTemporaryFile("w", prefix=".render-", suffix=".html", dir=ROOT, delete=False) as tmp:

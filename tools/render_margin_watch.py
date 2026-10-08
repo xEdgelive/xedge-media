@@ -34,6 +34,9 @@ from decimal import Decimal, ROUND_HALF_UP
 from PIL import Image
 from playwright.sync_api import sync_playwright
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from chromium import launch as launch_chromium  # noqa: E402
+
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 # Shorter names so every row fits on one line. Unknown names pass through unchanged.
@@ -220,7 +223,7 @@ def render(d: dict, fmt: str, out_path: pathlib.Path) -> None:
     png_path = html_path.with_suffix(".png")
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch()
+            browser = launch_chromium(p)
             page = browser.new_page(viewport={"width": f["w"], "height": f["h"]}, device_scale_factor=2)
             page.goto(html_path.as_uri())
             page.evaluate("document.fonts.ready")
