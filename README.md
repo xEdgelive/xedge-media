@@ -36,7 +36,7 @@ python3 tools/render_video.py /path/outside/repo/scenes.json videos/2026-10-11 -
 
 The scene types (hook, text, prices, sum, number, compare, list, checker and end) and the JSON format are described at the top of the script. Every frame shows 18+ and the helpline, and the end card adds xedge.live and the full National Gambling Helpline line. Add `--preview` for a silent draft with guessed timings, or `--stills 1.5,9,20` to look at single frames; both write only into the work folder.
 
-The voice comes from ElevenLabs. Its API key is stored as an API credential on the Claude cloud environment, for `api.elevenlabs.io`, so it is never in this repo, a file or a command. Voice clips are cached in the work folder, so a re-render costs no credits. A 30-second video uses about 400 characters of voice.
+The voice is Chris on ElevenLabs' Eleven v4, recorded as one continuous take of the whole script and timed to the word, so the captions and animation follow it. The API key is stored as an API credential on the Claude cloud environment, for `api.elevenlabs.io`, so it is never in this repo, a file or a command. The take is cached in the work folder, so a re-render costs no credits. A 30-second video uses about 400 characters of voice.
 
 It needs Python with `playwright` and `pillow`, a Chromium browser and ffmpeg. Where Playwright's own browser download is blocked, fetch Chrome for Testing with `npx -y @puppeteer/browsers install chrome-headless-shell@stable` and set `XEDGE_CHROMIUM` to its binary; set `XEDGE_FFMPEG` if ffmpeg isn't on the path (or `pip install imageio-ffmpeg`).
 

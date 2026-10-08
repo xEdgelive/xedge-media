@@ -5,14 +5,16 @@ Usage:
   python3 tools/render_video.py spec.json videos/YYYY-MM-DD --name the-4-8-you-never-see --work /path/outside/repo
   python3 tools/render_video.py spec.json videos/YYYY-MM-DD --name the-4-8-you-never-see --work /path/outside/repo --preview
 
-The voiceover comes from ElevenLabs' text-to-speech API. The API key is never in this repo,
-a file or the command line: the cloud environment's API credential adds it to requests for
-api.elevenlabs.io. Voice clips are cached in --work, so a re-render costs no credits.
---preview skips the voice, guesses the timings and writes a silent preview into --work only.
+The voiceover comes from ElevenLabs' text-to-speech API as one continuous take of the whole
+script (Chris on Eleven v4 by default), timed to the word so captions and animation follow it.
+The API key is never in this repo, a file or the command line: the cloud environment's API
+credential adds it to requests for api.elevenlabs.io. The take is cached in --work, so a
+re-render costs no credits. --preview skips the voice, guesses the timings and writes a silent
+preview into --work only.
 
 spec.json (keep it outside this repo):
 {
-  "voice": {"voice_id": "onwK4e9ZLuTAKqWW03F9", "speed": 1.0},
+  "voice": {"voice_id": "HfRP3cIhYLmeNHeTvkWK", "model_id": "eleven_v4", "tempo": 1.0},   (optional)
   "scenes": [
     {"type": "hook", "kicker": "PRICE CHECK", "title": "Every match has a [[hidden fee]]",
      "say": "Every football match has a hidden fee."},
@@ -34,6 +36,8 @@ spec.json (keep it outside this repo):
 - In "say", [shown|spoken] puts one thing in the captions and has the voice say another (fractional
   odds, the web address). {1}, {2} ... mark the moments the animation steps forward: tiles
   appearing then converting, a total landing, bars growing, list items appearing.
+- Write numbers as digits ("47.6", "104.8%"); Eleven v4 reads them naturally. Fractional odds and the
+  web address still need [shown|spoken]: [11/10|eleven to ten], [xedge.live|ex edge dot live].
 - [[Double brackets]] in a title show those words in the brand colour.
 - The checker scene is a copy of the free margin checker on xedge.live, with the same maths
   (the power method), so whatever odds it types give the numbers the real checker shows.
@@ -83,9 +87,13 @@ def ffmpeg_bin() -> str:
         return imageio_ffmpeg.get_ffmpeg_exe()
     except ImportError:
         sys.exit("ffmpeg not found: install it (apt-get install -y ffmpeg, or pip install imageio-ffmpeg) or set XEDGE_FFMPEG")
-DEFAULT_VOICE = {"voice_id": "onwK4e9ZLuTAKqWW03F9", "model_id": "eleven_multilingual_v2", "speed": 1.0,
-                 "stability": 0.5, "similarity_boost": 0.75, "style": 0.0}
-LEAD, PRE, GAP, END_HOLD = 0.25, 0.15, 0.35, 3.2
+
+# Chris (casual, conversational, clearly adult British voice) on Eleven v4, ElevenLabs' most natural model.
+# Eleven v4 has no speed or style setting; "tempo" speeds the finished take up or down (1.0 = as spoken).
+DEFAULT_VOICE = {"voice_id": "HfRP3cIhYLmeNHeTvkWK", "model_id": "eleven_v4", "speed": 1.0,
+                 "stability": 0.5, "similarity_boost": 0.75, "style": 0.0, "tempo": 1.0}
+V2_MODELS = {"eleven_multilingual_v2", "eleven_flash_v2_5", "eleven_turbo_v2_5"}
+LEAD, PRE, END_GAP, END_HOLD = 0.2, 0.12, 0.45, 3.0
 
 LIMITS = {
     "hook": {"kicker": 32, "title": 48, "say": 160},
@@ -195,7 +203,7 @@ def check(d: dict) -> tuple:
         for key in REQUIRED[kind]:
             if not sc.get(key):
                 problems.append(f"scene {n}: missing {key}")
-        allowed = set(LIMITS[kind]) | {"type", "pause"} | EXTRA_KEYS.get(kind, set())
+        allowed = set(LIMITS[kind]) | {"type"} | EXTRA_KEYS.get(kind, set())
         for key in sc:
             if key not in allowed:
                 problems.append(f"scene {n}: {key!r} isn't used on a {kind} scene")
@@ -204,8 +212,6 @@ def check(d: dict) -> tuple:
             size = len(parse_say(value)["display"]) if key == "say" else len(plain(value))
             if size > limit:
                 problems.append(f"scene {n}: {key} is {size} characters (limit {limit})")
-        if "pause" in sc and not (isinstance(sc["pause"], (int, float)) and 0 <= sc["pause"] <= 1.5):
-            problems.append(f"scene {n}: pause must be 0 to 1.5 seconds")
         if kind == "prices":
             tiles = sc.get("tiles") or []
             if not 2 <= len(tiles) <= 3:
@@ -298,66 +304,128 @@ def checker_numbers(odds: list) -> dict:
 # ---------------------------------------------------------------- voice
 
 class VoiceError(Exception):
-    pass
+    def __init__(self, message: str, code: int | None = None):
+        super().__init__(message)
+        self.code = code
 
 
-def tts(text: str, prev_text: str, next_text: str, voice: dict, cache: pathlib.Path) -> tuple:
-    """Return (mp3 path, alignment dict, characters billed). Cached by everything that shapes the audio."""
-    body = {"text": text, "model_id": voice["model_id"], "seed": 4207,
-            "voice_settings": {"stability": voice["stability"], "similarity_boost": voice["similarity_boost"],
-                               "style": voice["style"], "use_speaker_boost": True, "speed": voice["speed"]}}
-    if prev_text:
-        body["previous_text"] = prev_text
-    if next_text:
-        body["next_text"] = next_text
-    key = hashlib.sha1(json.dumps([voice["voice_id"], body], sort_keys=True).encode()).hexdigest()[:16]
-    mp3, meta = cache / f"{key}.mp3", cache / f"{key}.json"
-    if mp3.exists() and meta.exists():
-        return mp3, json.loads(meta.read_text()), 0
-    url = (f"https://api.elevenlabs.io/v1/text-to-speech/{voice['voice_id']}/with-timestamps"
-           f"?output_format=mp3_44100_128")
-    req = urllib.request.Request(url, data=json.dumps(body).encode(), method="POST",
-                                 headers={"Content-Type": "application/json", "Accept": "application/json"})
+API = "https://api.elevenlabs.io/v1"
+
+
+def eleven(path: str, body: bytes, content_type: str, want_json: bool = True):
+    """POST to the ElevenLabs API. The cloud environment's API credential adds the key."""
+    req = urllib.request.Request(API + path, data=body, method="POST",
+                                 headers={"Content-Type": content_type,
+                                          "Accept": "application/json" if want_json else "audio/mpeg"})
     try:
-        with urllib.request.urlopen(req, timeout=180) as r:
-            data = json.load(r)
+        with urllib.request.urlopen(req, timeout=300) as r:
+            raw = r.read()
     except urllib.error.HTTPError as e:
-        detail = e.read().decode(errors="replace")[:300]
+        detail = e.read().decode(errors="replace")[:400]
         if e.code in (401, 403):
             raise VoiceError(f"ElevenLabs refused the request ({e.code}): {detail}\nCheck the ElevenLabs API credential "
                              "on the cloud environment (host api.elevenlabs.io, header xi-api-key) and that the key "
-                             "allows Text to Speech and has credits left.")
-        raise VoiceError(f"ElevenLabs error {e.code}: {detail}")
+                             "allows Text to Speech and Forced Alignment and has credits left.", e.code)
+        raise VoiceError(f"ElevenLabs error {e.code} on {path.split('?')[0]}: {detail}", e.code)
     except (urllib.error.URLError, TimeoutError) as e:
-        raise VoiceError(f"Couldn't reach api.elevenlabs.io ({e}). The cloud environment needs the ElevenLabs API credential.")
+        raise VoiceError(f"Couldn't reach api.elevenlabs.io ({e}). This needs a cloud environment with the ElevenLabs API credential.")
+    return json.loads(raw) if want_json else raw
+
+
+def forced_alignment(audio: bytes, text: str) -> dict:
+    """Ask ElevenLabs when each character of the script is spoken in the audio."""
+    boundary = "xedge" + hashlib.sha1(audio[:4096] + text.encode()).hexdigest()[:20]
+    body = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"voice.mp3\"\r\n"
+            f"Content-Type: audio/mpeg\r\n\r\n").encode() + audio + (
+            f"\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"text\"\r\n\r\n{text}\r\n"
+            f"--{boundary}--\r\n").encode()
+    data = eleven("/forced-alignment", body, f"multipart/form-data; boundary={boundary}")
+    chars = data.get("characters") or []
+    return {"chars": [c.get("text", "") for c in chars], "starts": [float(c.get("start", 0)) for c in chars],
+            "ends": [float(c.get("end", 0)) for c in chars]}
+
+
+def map_alignment(text: str, align: dict) -> tuple:
+    """Start and end time for every character of the script, filling any gaps by interpolation."""
+    chars, st, en = align["chars"], align["starts"], align["ends"]
+    s_out, e_out = [None] * len(text), [None] * len(text)
+    j = 0
+    for i, ch in enumerate(text):
+        for k in range(j, min(len(chars), j + 12)):
+            if chars[k].lower() == ch.lower():
+                s_out[i], e_out[i] = float(st[k]), float(en[k])
+                j = k + 1
+                break
+    known = [i for i, v in enumerate(s_out) if v is not None]
+    if len(known) < 0.6 * len(text.replace(" ", "")):
+        raise VoiceError("The voice timings don't match the script; try again or check the script for odd characters")
+    for i in range(len(text)):
+        if s_out[i] is None:
+            prev = next((k for k in range(i - 1, -1, -1) if s_out[k] is not None and k in known), None)
+            nxt = next((k for k in range(i + 1, len(text)) if k in known), None)
+            if prev is None:
+                s_out[i] = e_out[i] = s_out[nxt]
+            elif nxt is None:
+                s_out[i] = e_out[i] = e_out[prev]
+            else:
+                v = e_out[prev] + (i - prev) / (nxt - prev) * (s_out[nxt] - e_out[prev])
+                s_out[i] = e_out[i] = v
+    return s_out, e_out
+
+
+def narrate(text: str, voice: dict, cache: pathlib.Path) -> tuple:
+    """One continuous take of the whole script: (mp3 path, character starts, character ends, characters billed).
+    Cached by everything that shapes the audio, so a re-render costs no credits."""
+    model = voice["model_id"]
+    settings = {"stability": voice["stability"], "similarity_boost": voice["similarity_boost"]}
+    if model in V2_MODELS:
+        settings.update({"style": voice["style"], "use_speaker_boost": True, "speed": voice["speed"]})
+    body = {"text": text, "model_id": model, "voice_settings": settings}
+    key = hashlib.sha1(json.dumps([voice["voice_id"], body], sort_keys=True).encode()).hexdigest()[:16]
+    mp3, meta = cache / f"{key}.mp3", cache / f"{key}.json"
+    if mp3.exists() and meta.exists():
+        m = json.loads(meta.read_text())
+        return mp3, m["starts"], m["ends"], 0
+    vid = voice["voice_id"]
+    align = None
+    try:
+        data = eleven(f"/text-to-speech/{vid}/with-timestamps?output_format=mp3_44100_128",
+                      json.dumps(body).encode(), "application/json")
+        audio = base64.b64decode(data["audio_base64"])
+        a = data.get("alignment") or data.get("normalized_alignment")
+        if a and a.get("characters"):
+            align = {"chars": a["characters"], "starts": a["character_start_times_seconds"],
+                     "ends": a["character_end_times_seconds"]}
+    except VoiceError as e:
+        if e.code not in (400, 404, 405, 422):
+            raise
+        audio = eleven(f"/text-to-speech/{vid}?output_format=mp3_44100_128", json.dumps(body).encode(),
+                       "application/json", want_json=False)
+    if align is None or "".join(align["chars"]) != text:
+        align = forced_alignment(audio, text)
+    starts, ends = map_alignment(text, align)
     cache.mkdir(parents=True, exist_ok=True)
-    mp3.write_bytes(base64.b64decode(data["audio_base64"]))
-    meta.write_text(json.dumps(data.get("alignment") or data.get("normalized_alignment")))
-    return mp3, json.loads(meta.read_text()), len(text)
+    mp3.write_bytes(audio)
+    meta.write_text(json.dumps({"starts": starts, "ends": ends, "model": model, "voice": vid}))
+    return mp3, starts, ends, len(text)
 
 
-def decode(mp3: pathlib.Path, out: pathlib.Path) -> float:
-    subprocess.run([ffmpeg_bin(), "-y", "-loglevel", "error", "-i", str(mp3), "-ac", "1", "-ar", str(SR),
-                    "-c:a", "pcm_s16le", str(out)], check=True)
+def decode(mp3: pathlib.Path, out: pathlib.Path, tempo: float = 1.0) -> float:
+    cmd = [ffmpeg_bin(), "-y", "-loglevel", "error", "-i", str(mp3)]
+    if tempo != 1.0:
+        cmd += ["-filter:a", f"atempo={tempo}"]
+    subprocess.run(cmd + ["-ac", "1", "-ar", str(SR), "-c:a", "pcm_s16le", str(out)], check=True)
     with wave.open(str(out)) as w:
         return w.getnframes() / SR
 
 
-def char_times(spoken: str, alignment: dict, duration: float) -> tuple:
-    chars = alignment.get("characters") or []
-    starts = alignment.get("character_start_times_seconds") or []
-    ends = alignment.get("character_end_times_seconds") or []
-    if "".join(chars) == spoken and len(starts) == len(spoken):
-        return starts, ends
-    # Fall back to spreading the characters through the clip if the alignment doesn't line up.
-    n = max(1, len(spoken))
-    return [duration * i / n for i in range(n)], [duration * (i + 1) / n for i in range(n)]
-
-
 def guess_times(spoken: str) -> tuple:
-    rate = 15.0  # characters a second, roughly ElevenLabs' pace at speed 1.0
-    starts = [i / rate for i in range(len(spoken))]
-    return starts, [s + 1 / rate for s in starts], len(spoken) / rate + 0.15
+    rate = 14.0  # characters a second, about Chris's pace on Eleven v4
+    starts, t = [], 0.0
+    for ch in spoken:
+        starts.append(t)
+        t += 1 / rate + (0.25 if ch in ".?!" else 0.0)
+    return starts, [s + 1 / rate for s in starts], t + 0.15
 
 
 # ---------------------------------------------------------------- page
@@ -707,37 +775,43 @@ def build_timeline(spec: dict, work: pathlib.Path, preview: bool) -> dict:
     scenes = spec["scenes"]
     voice = {**DEFAULT_VOICE, **spec.get("voice", {})}
     parsed = [parse_say(sc["say"]) if sc.get("say") else None for sc in scenes]
-    said = [p["spoken"] for p in parsed if p]
-    clips, billed, t = [], 0, LEAD
-    timeline, caps = [], []
-    k = 0
-    for i, (sc, p) in enumerate(zip(scenes, parsed)):
-        entry = {"type": sc["type"], "beats": [], "t0": 0.0 if i == 0 else max(0.0, t - PRE)}
+    # One continuous take: join every scene's line and remember where each one starts.
+    offsets, parts, pos = [], [], 0
+    for p in parsed:
+        offsets.append(pos if p else None)
         if p:
-            if preview:
-                starts, ends, dur = guess_times(p["spoken"])
-            else:
-                mp3, align, cost = tts(p["spoken"], " ".join(said[:k])[-400:], " ".join(said[k + 1:])[:400], voice, work / "voice")
-                billed += cost
-                dur = decode(mp3, work / f"clip-{i}.wav")
-                starts, ends = char_times(p["spoken"], align, dur)
-                clips.append((t, work / f"clip-{i}.wav"))
-            k += 1
-            s = p["spoken"]
+            parts.append(p["spoken"])
+            pos += len(p["spoken"]) + 1
+    full = " ".join(parts)
+    clips, billed = [], 0
+    if preview:
+        starts, ends, dur = guess_times(full)
+    else:
+        mp3, starts, ends, billed = narrate(full, voice, work / "voice")
+        tempo = float(voice.get("tempo", 1.0))
+        dur = decode(mp3, work / "narration.wav", tempo)
+        if tempo != 1.0:
+            starts, ends = [x / tempo for x in starts], [x / tempo for x in ends]
+        clips.append((LEAD, work / "narration.wav"))
 
-            def at(j, starts=starts, s=s, base=t):
-                while j < len(s) and s[j].isspace():
-                    j += 1
-                return base + (starts[min(j, len(starts) - 1)] if starts else 0)
+    def at(j: int) -> float:
+        while j < len(full) - 1 and full[j].isspace():
+            j += 1
+        return LEAD + starts[min(j, len(full) - 1)]
 
-            def until(j, ends=ends, s=s, base=t):
-                j = min(j, len(s)) - 1
-                while j > 0 and s[j].isspace():
-                    j -= 1
-                return base + (ends[max(j, 0)] if ends else 0)
+    def until(j: int) -> float:
+        j = min(j, len(full)) - 1
+        while j > 0 and full[j].isspace():
+            j -= 1
+        return LEAD + ends[max(j, 0)]
 
-            entry["beats"] = [at(p["beats"][b]) for b in sorted(p["beats"])]
-            words = [{"w": w["w"], "t0": at(w["a"]), "t1": until(w["b"])} for w in p["words"]]
+    speech_end = LEAD + max(ends)
+    timeline, caps = [], []
+    for i, (sc, p, off) in enumerate(zip(scenes, parsed, offsets)):
+        if p:
+            entry = {"type": sc["type"], "t0": 0.0 if i == 0 else max(0.0, at(off) - PRE),
+                     "beats": [at(off + p["beats"][b]) for b in sorted(p["beats"])]}
+            words = [{"w": w["w"], "t0": at(off + w["a"]), "t1": until(off + w["b"])} for w in p["words"]]
             chunk = []
             for w in words:
                 text = " ".join(x["w"] for x in chunk + [w])
@@ -747,8 +821,8 @@ def build_timeline(spec: dict, work: pathlib.Path, preview: bool) -> dict:
                 chunk.append(w)
             if chunk:
                 caps.append(chunk)
-            t = t + dur + float(sc.get("pause", GAP))
-        entry["t_end_voice"] = t
+        else:
+            entry = {"type": sc["type"], "t0": speech_end + END_GAP - PRE, "beats": []}
         timeline.append(entry)
     total = timeline[-1]["t0"] + END_HOLD
     for i, entry in enumerate(timeline):
@@ -772,7 +846,7 @@ def build_timeline(spec: dict, work: pathlib.Path, preview: bool) -> dict:
     cover_t = min(total - 0.1, hook["t0"] + 0.06 + 0.07 * n_words + 0.6)
     return {"scenes": timeline, "caps": cap_list, "total": total, "clips": clips, "billed": billed,
             "cover_t": cover_t, "voice": voice,
-            "script": " ".join(p["display"] for p in parsed if p), "spoken": " ".join(said)}
+            "script": " ".join(p["display"] for p in parsed if p), "spoken": full}
 
 
 def build_track(clips: list, total: float, out: pathlib.Path) -> None:
