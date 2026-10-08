@@ -34,11 +34,11 @@ The slide types (cover, text, number, list and end) and the JSON format are desc
 python3 tools/render_video.py /path/outside/repo/scenes.json videos/2026-10-11 --name the-4-8-you-never-see --work /path/outside/repo/work
 ```
 
-The scene types (hook, text, prices, sum, number, compare, list, checker and end) and the JSON format are described at the top of the script. Every frame shows 18+ and the helpline, and the end card adds xedge.live and the full National Gambling Helpline line. Add `--preview` for a silent draft with guessed timings, or `--stills 1.5,9,20` to look at single frames; both write only into the work folder.
+The scene types (hook, text, prices, sum, number, compare, list, checker and end) and the JSON format are described at the top of the script. Every frame shows 18+ and the helpline (the tool refuses to render if any frame wouldn't), and the end card adds xedge.live and the full National Gambling Helpline line. Add `--preview` for a silent draft with guessed timings, or `--stills 1.5,9,20` to look at single frames; both write only into the work folder.
 
 The voice is Chris on ElevenLabs' Eleven v4, recorded as one continuous take of the whole script and timed to the word, so the captions and animation follow it. The API key is stored as an API credential on the Claude cloud environment, for `api.elevenlabs.io`, so it is never in this repo, a file or a command. The take is cached in the work folder, so a re-render costs no credits. A 30-second video uses about 400 characters of voice.
 
-It needs Python with `playwright` and `pillow`, a Chromium browser and ffmpeg. Where Playwright's own browser download is blocked, fetch Chrome for Testing with `npx -y @puppeteer/browsers install chrome-headless-shell@stable` and set `XEDGE_CHROMIUM` to its binary; set `XEDGE_FFMPEG` if ffmpeg isn't on the path (or `pip install imageio-ffmpeg`).
+All three tools need Python 3.10 or later with `playwright` and `pillow`, a Chromium browser and ffmpeg. They use Playwright's own browser if it's installed (`python3 -m playwright install chromium`); where that download is blocked, they find a Chromium already on the machine (another Playwright version's browser, such as the one cloud environments keep in `/opt/pw-browsers`, or Chrome for Testing fetched with `npx -y @puppeteer/browsers install chrome-headless-shell@stable --path ~/browsers`). Set `XEDGE_CHROMIUM` to a Chrome or chrome-headless-shell binary to choose one yourself, and `XEDGE_FFMPEG` if ffmpeg isn't on the path (or `pip install imageio-ffmpeg`).
 
 ## Rules for this repo
 

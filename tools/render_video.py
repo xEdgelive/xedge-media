@@ -45,8 +45,9 @@ spec.json (keep it outside this repo):
   National Gambling Helpline line.
 
 It refuses to render if text is too long or doesn't fit, names a bookmaker, uses banned
-wording, or would overwrite a video a post may be using. Softer wording matches are printed
-as warnings for a person to check against the Rules tab.
+wording, would leave any frame without 18+ and the helpline fully on screen, or would overwrite
+a video a post may be using. Softer wording matches are printed as warnings for a person to
+check against the Rules tab.
 """
 import argparse
 import hashlib
@@ -70,12 +71,12 @@ from playwright.sync_api import sync_playwright
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from render_carousel import BANNED, BOOKMAKERS, WARN  # noqa: E402  (same wording rules as the cards)
+from chromium import launch as launch_chromium  # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 W, H, FPS, SR = 1080, 1920, 30, 48000
-# Where there's no Playwright browser or system ffmpeg (a fresh cloud environment), point these at
-# a Chrome / chrome-headless-shell binary and an ffmpeg binary.
-CHROMIUM = os.environ.get("XEDGE_CHROMIUM") or None
+# Where there's no system ffmpeg (a fresh cloud environment), point XEDGE_FFMPEG at an ffmpeg binary;
+# tools/chromium.py picks the browser (XEDGE_CHROMIUM, Playwright's own, or one already on the machine).
 
 
 def ffmpeg_bin() -> str:
@@ -606,6 +607,8 @@ function bez(x1,y1,x2,y2){
 }
 const EO=bez(.16,1,.3,1), ES=bez(.2,.9,.3,1);
 const P=(t,a,d)=>clamp((t-a)/d);
+// The end card's 18+ and helpline line rises EH seconds into the end card, over EHD seconds.
+const EH=0.85, EHD=0.5;
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 function rise(el,k,dy=30){ if(!el) return; el.style.opacity=k; el.style.transform=`translateY(${(1-k)*dy}px)`; }
 function fmt(n,k){ return n.pre+(n.num*k).toFixed(n.dec)+n.suf; }
@@ -710,15 +713,16 @@ const U = {
     rise($('.ebody',el),EO(P(t,sc.t0+0.45,0.5)),24);
     rise($('.url',el),EO(P(t,sc.t0+0.55,0.55)),30);
     rise($('.esub',el),EO(P(t,sc.t0+0.7,0.5)),20);
-    rise($('.ehelp',el),EO(P(t,sc.t0+0.85,0.5)),20);
+    rise($('.ehelp',el),EO(P(t,sc.t0+EH,EHD)),20);
   },
 };
 const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function seek(t){
   $('#bg').style.transform=`translateY(${-((t*14)%120)}px)`;
   const endSc=D.scenes[D.scenes.length-1];
-  const ha=1-EO(P(t,endSc.t0-0.1,0.35));
-  $('#head').style.opacity=ha; $('#help').style.opacity=ha;
+  // The header logo hands over to the end card's logo; its 18+ and helpline stay until the end card's own line is in.
+  const ha=1-EO(P(t,endSc.t0-0.1,0.35)), hb=1-EO(P(t,endSc.t0+EH+EHD,0.35));
+  $('#head img').style.opacity=ha; $('#head .pill').style.opacity=hb; $('#help').style.opacity=hb;
   D.scenes.forEach((sc,i)=>{
     const el=document.getElementById('s'+i);
     const last=i===D.scenes.length-1;
@@ -756,17 +760,34 @@ function fit(){
   });
   return bad;
 }
-window.seek=seek; window.fitAll=fit;
+// How visible an element is: its opacity times its ancestors', or 0 if it's missing, hidden or outside
+// the frame or its scene's box (scenes clip what overflows them).
+function shown(el){
+  if(!el) return 0;
+  const r=el.getBoundingClientRect(), box=el.closest('.scene'), c=box?box.getBoundingClientRect():{left:0,top:0,right:1080,bottom:1920};
+  if(r.left<Math.max(0,c.left)-1 || r.top<Math.max(0,c.top)-1 || r.right>Math.min(1080,c.right)+1 || r.bottom>Math.min(1920,c.bottom)+1) return 0;
+  let o=1;
+  for(let x=el;x&&x!==document.documentElement;x=x.parentElement){
+    const s=getComputedStyle(x); if(s.visibility==='hidden'||s.display==='none') return 0; o*=parseFloat(s.opacity);
+  }
+  return o;
+}
+// How visible the 18+ and helpline are: the header's pair, or the end card's line, whichever shows more.
+function safety(){
+  return Math.max(Math.min(shown($('#head .pill')),shown($('#help'))), shown($('.scene.end .ehelp')));
+}
+window.seek=seek; window.fitAll=fit; window.safety=safety;
 """
 
 
 def page_html(scenes: list, data: dict) -> str:
     body = "".join(scene_html(i, sc) for i, sc in enumerate(scenes))
+    script = JS.replace("__DATA__", json.dumps(data).replace("</", "<\\/"))
     return (f'<!doctype html><html><head><meta charset="utf-8"><style>{CSS}</style></head><body>'
             '<div id="bg"></div><div id="vig"></div>'
             '<div id="head"><img src="brand/xedge-logo-on-dark.svg" alt="xEdge"><div class="pill">18+</div></div>'
             '<div id="help">GAMBLING HELP · 0808 8020 133</div>'
-            f'{body}<div id="cap"></div><script>{JS.replace("__DATA__", json.dumps(data).replace("</", "<\\/"))}</script></body></html>')
+            f'{body}<div id="cap"></div><script>{script}</script></body></html>')
 
 
 # ---------------------------------------------------------------- timeline
@@ -868,18 +889,29 @@ def build_track(clips: list, total: float, out: pathlib.Path) -> None:
 # ---------------------------------------------------------------- render
 
 LOUDNESS = "I=-14:TP=-1.5:LRA=11"  # -14 LUFS, the level TikTok, Reels and Shorts play voice at
+UPMIX = "pan=stereo|c0=c0|c1=c0"  # the mono voice on both channels at full level
 
 
 def loudnorm_filter(audio: pathlib.Path) -> str:
     """Measure the voice track first, then normalise it with those figures (two passes). A single pass lands
-    2 to 3 dB short on a 30-second voiceover, because it has to guess the level as it goes."""
+    2 to 3 dB short on a 30-second voiceover, because it has to guess the level as it goes. The mono voice is put
+    on both stereo channels at full level first: ffmpeg's own upmix to stereo would lower each channel by 3 dB after
+    loudnorm's peak limiter had already used that headroom, leaving the voice short again. loudnorm normalises
+    linearly when the peaks allow, otherwise in its dynamic mode."""
     r = subprocess.run([ffmpeg_bin(), "-hide_banner", "-nostats", "-i", str(audio), "-af",
-                        f"loudnorm={LOUDNESS}:print_format=json", "-f", "null", "-"], capture_output=True, text=True)
+                        f"{UPMIX},loudnorm={LOUDNESS}:print_format=json", "-f", "null", "-"], capture_output=True, text=True)
     m = re.search(r"\{[^{}]*\"input_i\"[^{}]*\}", r.stderr)
-    if r.returncode != 0 or not m:
-        return f"loudnorm={LOUDNESS}"
-    j = json.loads(m.group(0))
-    return (f"loudnorm={LOUDNESS}:measured_I={j['input_i']}:measured_TP={j['input_tp']}:measured_LRA={j['input_lra']}"
+    ranges = {"input_i": (-99, 0), "input_tp": (-99, 99), "input_lra": (0, 99), "input_thresh": (-99, 0), "target_offset": (-99, 99)}
+    try:
+        if r.returncode != 0 or not m:
+            raise ValueError
+        j = json.loads(m.group(0))
+        if any(not lo <= float(j[k]) <= hi for k, (lo, hi) in ranges.items()):
+            raise ValueError
+    except (ValueError, KeyError):
+        print("Couldn't measure the voice track's loudness; normalising it in one pass", file=sys.stderr)
+        return f"{UPMIX},loudnorm={LOUDNESS}"
+    return (f"{UPMIX},loudnorm={LOUDNESS}:measured_I={j['input_i']}:measured_TP={j['input_tp']}:measured_LRA={j['input_lra']}"
             f":measured_thresh={j['input_thresh']}:offset={j['target_offset']}:linear=true")
 
 
@@ -891,7 +923,7 @@ def render(spec: dict, tl: dict, out_mp4: pathlib.Path, cover: pathlib.Path, aud
         html_path = pathlib.Path(tmp.name)
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(executable_path=CHROMIUM)
+            browser = launch_chromium(p)
             page = browser.new_page(viewport={"width": W, "height": H}, device_scale_factor=1)
             page.goto(html_path.as_uri())
             page.evaluate("document.fonts.ready")
@@ -901,7 +933,14 @@ def render(spec: dict, tl: dict, out_mp4: pathlib.Path, cover: pathlib.Path, aud
             bad = page.evaluate("fitAll()")
             if bad:
                 sys.exit("Refusing to render, text doesn't fit:\n- " + "\n- ".join(bad))
-            vf = "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p"
+            safe = "ts => ts.filter(t => { seek(t); return safety() < 0.99; })"
+            dark = page.evaluate(safe, [f / FPS for f in range(frames)])
+            if dark:
+                sys.exit(f"Refusing to render: 18+ and the helpline aren't fully on screen from {min(dark):.2f} s "
+                         f"to {max(dark):.2f} s ({len(dark)} frames)")
+            if page.evaluate(safe, [tl["cover_t"]]):
+                sys.exit("Refusing to render: 18+ and the helpline aren't fully on screen on the cover")
+            vf = "scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,setsar=1"
             cmd = [ffmpeg_bin(), "-y", "-loglevel", "error", "-f", "image2pipe", "-framerate", str(FPS), "-c:v", "png", "-i", "-"]
             if audio:
                 cmd += ["-i", str(audio), "-filter:a", loudnorm_filter(audio) + ",aresample=48000", "-c:a", "aac", "-b:a", "160k", "-ar", str(SR), "-ac", "2"]
@@ -937,7 +976,7 @@ def stills(spec: dict, tl: dict, times: list) -> list:
         html_path = pathlib.Path(tmp.name)
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(executable_path=CHROMIUM)
+            browser = launch_chromium(p)
             page = browser.new_page(viewport={"width": W, "height": H}, device_scale_factor=1)
             page.goto(html_path.as_uri())
             page.evaluate("document.fonts.ready")
