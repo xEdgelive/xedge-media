@@ -606,6 +606,7 @@ function bez(x1,y1,x2,y2){
 }
 const EO=bez(.16,1,.3,1), ES=bez(.2,.9,.3,1);
 const P=(t,a,d)=>clamp((t-a)/d);
+const HELP_IN=0.85, HELP_RISE=0.5;  // the end card's 18+ and helpline line: starts rising this long after the card, over this long
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 function rise(el,k,dy=30){ if(!el) return; el.style.opacity=k; el.style.transform=`translateY(${(1-k)*dy}px)`; }
 function fmt(n,k){ return n.pre+(n.num*k).toFixed(n.dec)+n.suf; }
@@ -710,15 +711,18 @@ const U = {
     rise($('.ebody',el),EO(P(t,sc.t0+0.45,0.5)),24);
     rise($('.url',el),EO(P(t,sc.t0+0.55,0.55)),30);
     rise($('.esub',el),EO(P(t,sc.t0+0.7,0.5)),20);
-    rise($('.ehelp',el),EO(P(t,sc.t0+0.85,0.5)),20);
+    rise($('.ehelp',el),EO(P(t,sc.t0+HELP_IN,HELP_RISE)),20);
   },
 };
 const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function seek(t){
   $('#bg').style.transform=`translateY(${-((t*14)%120)}px)`;
   const endSc=D.scenes[D.scenes.length-1];
-  const ha=1-EO(P(t,endSc.t0-0.1,0.35));
-  $('#head').style.opacity=ha; $('#help').style.opacity=ha;
+  // The header logo makes way for the end card's. The header's 18+ and helpline stay until the end card's
+  // own line has fully risen, so every frame has one of each.
+  $('#head img').style.opacity=1-EO(P(t,endSc.t0-0.1,0.35));
+  const ha=1-EO(P(t,endSc.t0+HELP_IN+HELP_RISE,0.35));
+  $('#head .pill').style.opacity=ha; $('#help').style.opacity=ha;
   D.scenes.forEach((sc,i)=>{
     const el=document.getElementById('s'+i);
     const last=i===D.scenes.length-1;
@@ -762,11 +766,12 @@ window.seek=seek; window.fitAll=fit;
 
 def page_html(scenes: list, data: dict) -> str:
     body = "".join(scene_html(i, sc) for i, sc in enumerate(scenes))
+    script = JS.replace("__DATA__", json.dumps(data).replace("</", "<\\/"))  # outside the f-string: Python 3.11 allows no backslash there
     return (f'<!doctype html><html><head><meta charset="utf-8"><style>{CSS}</style></head><body>'
             '<div id="bg"></div><div id="vig"></div>'
             '<div id="head"><img src="brand/xedge-logo-on-dark.svg" alt="xEdge"><div class="pill">18+</div></div>'
             '<div id="help">GAMBLING HELP · 0808 8020 133</div>'
-            f'{body}<div id="cap"></div><script>{JS.replace("__DATA__", json.dumps(data).replace("</", "<\\/"))}</script></body></html>')
+            f'{body}<div id="cap"></div><script>{script}</script></body></html>')
 
 
 # ---------------------------------------------------------------- timeline
