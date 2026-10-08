@@ -38,6 +38,8 @@ The scene types (hook, text, prices, sum, number, compare, list, checker and end
 
 The voice is Chris on ElevenLabs' Eleven v4, recorded as one continuous take of the whole script and timed to the word, so the captions and animation follow it. The API key is stored as an API credential on the Claude cloud environment, for `api.elevenlabs.io`, so it is never in this repo, a file or a command. The take is cached in the work folder, so a re-render costs no credits. A 30-second video uses about 400 characters of voice.
 
+Normally nobody runs it by hand. Each video waiting to be made is a pull request in the private repo `xEdgelive/xedge-queue`, holding a queue entry (`queue/<name>.json`: name, folder, caption, whether to make Buffer drafts, and the scenes). Opening the pull request starts the "xEdge weekly videos" routine in Claude Code, the environment that holds the voice credential. It passes the entry to this tool as it is, saves the video here, makes the Buffer drafts if asked, then records the result and merges the pull request. The entries stay in the private repo because they can hold figures and unpublished wording.
+
 It needs Python with `playwright` and `pillow`, a Chromium browser and ffmpeg. Where Playwright's own browser download is blocked, fetch Chrome for Testing with `npx -y @puppeteer/browsers install chrome-headless-shell@stable` and set `XEDGE_CHROMIUM` to its binary; set `XEDGE_FFMPEG` if ffmpeg isn't on the path (or `pip install imageio-ffmpeg`).
 
 ## Rules for this repo

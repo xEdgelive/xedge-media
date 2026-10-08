@@ -32,6 +32,10 @@ spec.json (keep it outside this repo):
   ]
 }
 
+A queue entry from the private repo xEdgelive/xedge-queue, {"name", "folder", "buffer_drafts", "caption",
+"scenes"}, can be passed as it is. The tool checks that its name and folder match --name and the output
+folder, and holds its caption to the same wording rules as the scenes (and it must say 18+).
+
 - 3 to 9 scenes. The first must be a hook and the last an end card. Every scene but the end card has a voice line.
 - In "say", [shown|spoken] puts one thing in the captions and has the voice say another (fractional
   odds, the web address). {1}, {2} ... mark the moments the animation steps forward: tiles
@@ -176,6 +180,11 @@ def odds_value(text: str) -> float:
     raise ValueError(text)
 
 
+# A queue entry from the private repo xEdgelive/xedge-queue can be passed as it is: these fields
+# are for the routine that makes the video, and the tool only checks them.
+QUEUE_KEYS = {"name", "folder", "buffer_drafts", "caption", "result"}
+
+
 def check(d: dict) -> tuple:
     problems, warnings = [], []
     scenes = d.get("scenes")
@@ -188,8 +197,37 @@ def check(d: dict) -> tuple:
     voice = d.get("voice", {})
     if not isinstance(voice, dict) or set(voice) - set(DEFAULT_VOICE):
         problems.append(f"voice can only set {', '.join(DEFAULT_VOICE)}")
-    for k in set(d) - {"voice", "scenes"}:
+    for k in set(d) - {"voice", "scenes"} - QUEUE_KEYS:
         problems.append(f"{k!r} isn't used")
+    if "name" in d and not (isinstance(d["name"], str) and re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", d["name"])):
+        problems.append("name must be lowercase letters, digits and hyphens")
+    if "folder" in d and not (isinstance(d["folder"], str) and re.fullmatch(r"videos/\d{4}-\d{2}-\d{2}", d["folder"])):
+        problems.append("folder must look like videos/YYYY-MM-DD")
+    if "buffer_drafts" in d and not isinstance(d["buffer_drafts"], bool):
+        problems.append("buffer_drafts must be true or false")
+    if "caption" in d:
+        cap = d["caption"]
+        if not isinstance(cap, str) or not cap.strip():
+            problems.append("caption must be text")
+        else:
+            if len(cap) > 2200:
+                problems.append("caption is over 2,200 characters, TikTok's and Instagram's limit")
+            if "18+" not in cap:
+                problems.append("caption must say 18+")
+            if "0808 8020 133" not in cap:
+                warnings.append("caption doesn't give the helpline (0808 8020 133)")
+            text = cap.lower().replace("’", "'").replace("‘", "'")
+            for name in BOOKMAKERS:
+                if re.search(rf"(?<![a-z0-9]){re.escape(name)}(?![a-z0-9])", text):
+                    problems.append(f"caption names a bookmaker ({name})")
+            for pattern in BANNED:
+                m = re.search(rf"\b{pattern}\b", text)
+                if m:
+                    problems.append(f"caption: banned wording ({m.group(0)!r})")
+            for pattern in WARN:
+                m = re.search(rf"\b{pattern}\b", text)
+                if m:
+                    warnings.append(f"caption: check the context of {m.group(0)!r}")
     for n, sc in enumerate(scenes, 1):
         if not isinstance(sc, dict):
             problems.append(f"scene {n}: not a scene object")
@@ -971,6 +1009,10 @@ def main() -> None:
         sys.exit("--work must be outside the repo")
     spec = json.loads(pathlib.Path(a.spec).read_text())
     problems, warnings = check(spec)
+    if spec.get("name") and spec["name"] != a.name:
+        problems.append(f"--name {a.name} doesn't match the entry's name, {spec['name']}")
+    if spec.get("folder") and not a.preview and pathlib.PurePosixPath(a.out_dir).as_posix().rstrip("/") != spec["folder"]:
+        problems.append(f"the output folder {a.out_dir} doesn't match the entry's folder, {spec['folder']}")
     if problems:
         sys.exit("Refusing to render:\n- " + "\n- ".join(problems))
     for sc in spec["scenes"]:
