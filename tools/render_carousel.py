@@ -38,8 +38,13 @@ import shutil
 import sys
 import tempfile
 
+import os
+
 from PIL import Image
 from playwright.sync_api import sync_playwright
+
+# Set XEDGE_CHROMIUM to a Chromium binary when Playwright can't download its own (same as render_video.py).
+CHROMIUM = os.environ.get("XEDGE_CHROMIUM") or None
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 W, H = 1080, 1350
@@ -298,7 +303,7 @@ def render_into(slides: list, paths: list) -> None:
     tmp_files = []
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch()
+            browser = p.chromium.launch(executable_path=CHROMIUM)
             page = browser.new_page(viewport={"width": W, "height": H}, device_scale_factor=2)
             for n, (s, out_path) in enumerate(zip(slides, paths), 1):
                 with tempfile.NamedTemporaryFile("w", prefix=".render-", suffix=".html", dir=ROOT, delete=False) as tmp:

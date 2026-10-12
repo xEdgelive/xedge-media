@@ -31,8 +31,13 @@ import sys
 import tempfile
 from decimal import Decimal, ROUND_HALF_UP
 
+import os
+
 from PIL import Image
 from playwright.sync_api import sync_playwright
+
+# Set XEDGE_CHROMIUM to a Chromium binary when Playwright can't download its own (same as render_video.py).
+CHROMIUM = os.environ.get("XEDGE_CHROMIUM") or None
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
@@ -220,7 +225,7 @@ def render(d: dict, fmt: str, out_path: pathlib.Path) -> None:
     png_path = html_path.with_suffix(".png")
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch()
+            browser = p.chromium.launch(executable_path=CHROMIUM)
             page = browser.new_page(viewport={"width": f["w"], "height": f["h"]}, device_scale_factor=2)
             page.goto(html_path.as_uri())
             page.evaluate("document.fonts.ready")

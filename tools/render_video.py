@@ -800,11 +800,12 @@ window.seek=seek; window.fitAll=fit;
 
 def page_html(scenes: list, data: dict) -> str:
     body = "".join(scene_html(i, sc) for i, sc in enumerate(scenes))
+    payload = json.dumps(data).replace("</", "<\\/")  # outside the f-string so Python 3.11 can parse this file
     return (f'<!doctype html><html><head><meta charset="utf-8"><style>{CSS}</style></head><body>'
             '<div id="bg"></div><div id="vig"></div>'
             '<div id="head"><img src="brand/xedge-logo-on-dark.svg" alt="xEdge"><div class="pill">18+</div></div>'
             '<div id="help">GAMBLING HELP · 0808 8020 133</div>'
-            f'{body}<div id="cap"></div><script>{JS.replace("__DATA__", json.dumps(data).replace("</", "<\\/"))}</script></body></html>')
+            f'{body}<div id="cap"></div><script>{JS.replace("__DATA__", payload)}</script></body></html>')
 
 
 # ---------------------------------------------------------------- timeline
