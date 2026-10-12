@@ -470,16 +470,24 @@ def guess_times(spoken: str) -> tuple:
 
 def rich_words(text: str) -> str:
     """Words as animatable spans; [[words]] in the brand colour."""
-    out, hl = [], False
+    groups, hl, after_space = [], False, True
     for part in re.split(r"(\[\[|\]\])", text):
         if part == "[[":
             hl = True
         elif part == "]]":
             hl = False
-        else:
-            for w in part.split():
-                out.append(f'<span class="w{" hl" if hl else ""}">{html.escape(w)}</span>')
-    return " ".join(out)
+        elif part:
+            for k, w in enumerate(part.split()):
+                span = f'<span class="w{" hl" if hl else ""}">{html.escape(w)}</span>'
+                # Punctuation straight after ]] (as in "[[still there]]?") stays with the word before it:
+                # both go in one no-wrap group, so it can't drop onto a line of its own.
+                if k == 0 and groups and not part[0].isspace() and not after_space:
+                    groups[-1].append(span)
+                else:
+                    groups.append([span])
+            after_space = part[-1].isspace()
+    return " ".join(g[0] if len(g) == 1 else '<span style="white-space:nowrap">' + "".join(g) + "</span>"
+                    for g in groups)
 
 
 def num_parts(text: str):
