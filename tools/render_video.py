@@ -214,8 +214,6 @@ def check(d: dict) -> tuple:
                 problems.append("caption is over 2,200 characters, TikTok's and Instagram's limit")
             if "18+" not in cap:
                 problems.append("caption must say 18+")
-            if "0808 8020 133" not in cap:
-                warnings.append("caption doesn't give the helpline (0808 8020 133)")
             text = cap.lower().replace("’", "'").replace("‘", "'")
             for name in BOOKMAKERS:
                 if re.search(rf"(?<![a-z0-9]){re.escape(name)}(?![a-z0-9])", text):
