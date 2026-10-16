@@ -97,7 +97,7 @@ def ffmpeg_bin() -> str:
 DEFAULT_VOICE = {"voice_id": "HfRP3cIhYLmeNHeTvkWK", "model_id": "eleven_v4", "speed": 1.0,
                  "stability": 0.5, "similarity_boost": 0.75, "style": 0.0, "tempo": 1.0}
 V2_MODELS = {"eleven_multilingual_v2", "eleven_flash_v2_5", "eleven_turbo_v2_5"}
-LEAD, PRE, END_GAP, END_HOLD = 0.2, 0.12, 0.45, 3.0
+LEAD, PRE, END_GAP, END_HOLD = 0.2, 0.12, 0.45, 2.0
 
 LIMITS = {
     "hook": {"kicker": 32, "title": 48, "say": 160},
@@ -656,8 +656,11 @@ function fmt(n,k){ return n.pre+(n.num*k).toFixed(n.dec)+n.suf; }
 function beat(sc,i,fallback){ const b=sc.beats[i]; return (b===undefined||b===null)?fallback:b; }
 const U = {
   hook(sc,el,t){
-    rise($('.kicker',el),EO(P(t,sc.t0,0.5)),20);
-    $$('.w',el).forEach((w,i)=>rise(w,EO(P(t,sc.t0+0.06+i*0.07,0.55)),56));
+    // Fast entrance: words start at once and the whole title is in by about 0.6 s,
+    // then a slow push-in keeps the hook moving until the next scene.
+    rise($('.kicker',el),EO(P(t,sc.t0,0.35)),20);
+    $$('.w',el).forEach((w,i)=>rise(w,EO(P(t,sc.t0+i*0.04,0.38)),56));
+    const h=$('h1',el); if(h){ h.style.transformOrigin='left center'; h.style.transform=`scale(${1+0.035*ES(P(t,sc.t0,Math.max(0.5,sc.t1-sc.t0)))})`; }
   },
   text(sc,el,t){
     rise($('.kicker',el),EO(P(t,sc.t0,0.5)),20);
@@ -749,12 +752,14 @@ const U = {
     rise($('.res .note',el),EO(P(t,done+0.6,0.5)),12);
   },
   end(sc,el,t){
-    const k=EO(P(t,sc.t0+0.02,0.6)); const lg=$('.elogo',el); lg.style.opacity=k; lg.style.transform=`scale(${0.9+0.1*k})`;
-    $$('h1 .w',el).forEach((w,i)=>rise(w,EO(P(t,sc.t0+0.15+i*0.06,0.5)),40));
-    rise($('.ebody',el),EO(P(t,sc.t0+0.45,0.5)),24);
-    rise($('.url',el),EO(P(t,sc.t0+0.55,0.55)),30);
-    rise($('.esub',el),EO(P(t,sc.t0+0.7,0.5)),20);
-    rise($('.ehelp',el),EO(P(t,sc.t0+0.85,0.5)),20);
+    // Quick build so the whole card (18+ and the helpline included) is settled by about 0.75 s
+    // and then holds still until the loop.
+    const k=EO(P(t,sc.t0,0.4)); const lg=$('.elogo',el); lg.style.opacity=k; lg.style.transform=`scale(${0.9+0.1*k})`;
+    $$('h1 .w',el).forEach((w,i)=>rise(w,EO(P(t,sc.t0+0.06+i*0.03,0.35)),40));
+    rise($('.ebody',el),EO(P(t,sc.t0+0.2,0.35)),24);
+    rise($('.url',el),EO(P(t,sc.t0+0.25,0.4)),30);
+    rise($('.esub',el),EO(P(t,sc.t0+0.32,0.35)),20);
+    rise($('.ehelp',el),EO(P(t,sc.t0+0.38,0.35)),20);
   },
 };
 const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -888,7 +893,7 @@ def build_timeline(spec: dict, work: pathlib.Path, preview: bool) -> dict:
             entry["marginNum"] = num_parts(sc["_checker"]["margin"])
     hook = timeline[0]
     n_words = len(re.findall(r"\S+", plain(scenes[0]["title"])))
-    cover_t = min(total - 0.1, hook["t0"] + 0.06 + 0.07 * n_words + 0.6)
+    cover_t = min(total - 0.1, hook["t0"] + 0.04 * n_words + 0.6)
     return {"scenes": timeline, "caps": cap_list, "total": total, "clips": clips, "billed": billed,
             "cover_t": cover_t, "voice": voice,
             "script": " ".join(p["display"] for p in parsed if p), "spoken": full}
