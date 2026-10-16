@@ -33,7 +33,8 @@ spec.json (keep it outside this repo):
 }
 
 A queue entry from the private repo xEdgelive/xedge-queue, {"name", "folder", "buffer_drafts", "caption",
-"scenes"}, can be passed as it is. The tool checks that its name and folder match --name and the output
+"slot", "scenes"}, can be passed as it is. "slot" (mon to sun) is the day of the folder's week the video goes
+out; the video routine uses it to schedule the posts, and the tool only checks it's a weekday. The tool checks that its name and folder match --name and the output
 folder, and holds its caption to the same wording rules as the scenes (and it must say 18+).
 
 - 3 to 9 scenes. The first must be a hook and the last an end card. Every scene but the end card has a voice line.
@@ -182,7 +183,8 @@ def odds_value(text: str) -> float:
 
 # A queue entry from the private repo xEdgelive/xedge-queue can be passed as it is: these fields
 # are for the routine that makes the video, and the tool only checks them.
-QUEUE_KEYS = {"name", "folder", "buffer_drafts", "caption", "result"}
+QUEUE_KEYS = {"name", "folder", "buffer_drafts", "caption", "slot", "result"}
+SLOTS = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
 
 
 def check(d: dict) -> tuple:
@@ -205,6 +207,8 @@ def check(d: dict) -> tuple:
         problems.append("folder must look like videos/YYYY-MM-DD")
     if "buffer_drafts" in d and not isinstance(d["buffer_drafts"], bool):
         problems.append("buffer_drafts must be true or false")
+    if "slot" in d and d["slot"] not in SLOTS:
+        problems.append("slot must be a weekday: mon, tue, wed, thu, fri, sat or sun")
     if "caption" in d:
         cap = d["caption"]
         if not isinstance(cap, str) or not cap.strip():
