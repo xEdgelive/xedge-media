@@ -7,6 +7,7 @@ Public images and videos for xEdge's social posts. Buffer only accepts media by 
 - `cards/YYYY-MM-DD/` holds the cards made on that date, such as `margin-watch-feed.jpg` (1080×1350, for the Instagram feed and X) and `margin-watch-story.jpg` (1080×1920, for Instagram Stories).
 - `tools/render_margin_watch.py` makes the Margin Watch cards from a JSON file of figures. It refuses to render if a figure fails its sanity checks (margins between 2% and 15%, at least 10 bookmakers per match, rows in margin order).
 - `tools/render_carousel.py` makes Instagram carousel slides (1080×1350) from a JSON file of slides, such as `start-here-01.jpg` to `start-here-05.jpg`. It refuses to render if a slide is too long, names a bookmaker, uses banned wording or would overwrite an existing file.
+- `tools/render_receipt.py` makes the receipt card (1080×1350), such as `if-bets-came-with-a-receipt.jpg`: an example bet shown as a receipt, with the margin it keeps as a line item. It works out every figure itself and uses the carousel tool's word lists.
 - `videos/YYYY-MM-DD/` holds the finished explainer videos for TikTok, Reels and Shorts (1080×1920 MP4 with the voiceover) and a cover frame for each.
 - `tools/render_video.py` makes those videos from a JSON file of scenes: animated in xEdge's style in code, voiced by ElevenLabs, with captions timed to the voice. It uses the same wording rules as the carousel tool, and its margin checker scene uses the same maths as the free checker on xedge.live.
 - `tools/check_post_text.py` checks the text of social posts (X posts, threads and captions) against the same wording rules before the Monday routine puts them into Buffer: no bookmaker names or banned wording, no helpline number or AI label in the text, no unfilled [brackets], 18+ where needed and each channel's length limit. It reads the word lists from `render_carousel.py` and needs only the standard library.
@@ -28,6 +29,14 @@ python3 tools/render_carousel.py /path/outside/repo/slides.json cards/2026-10-12
 ```
 
 The slide types (cover, text, number, list and end) and the JSON format are described at the top of the script. Every slide gets the 18+ badge and the helpline, and the end slide adds xedge.live. It prints the file paths, each slide's alt text and any wording a person should double-check against the Rules tab.
+
+## Making a receipt card
+
+```
+python3 tools/render_receipt.py /path/outside/repo/receipt.json cards/2026-10-26 --name receipt-over-2-5
+```
+
+The JSON gives a market, its 2 or 3 example prices, the outcome the receipt is for and a stake; the format is at the top of the script. The tool works out the payout, the fair price (power method, the same maths as the free checker) and the margin kept from the payout, so the card never carries a sum done by hand. Prices on a receipt are always examples, never a real match. It refuses bookmaker names, banned wording, a margin outside 0.5% to 30% and a file name that already exists, and prints the file path, the alt text, the figures and any wording warnings.
 
 ## Making a video
 
