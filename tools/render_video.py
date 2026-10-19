@@ -543,7 +543,7 @@ def scene_html(i: int, sc: dict) -> str:
         inner = ('<div class="chk"><div class="urlchip"><span class="dot"></span>xedge.live</div>'
                  '<div class="clab">FREE TOOL · MARGIN CHECKER</div><h2>How much margin is built into the odds?</h2>'
                  f'<div class="ins">{ins}</div><div class="res"><div class="hd"><span>Bookmaker margin</span><span class="m">{c["margin"]}</span></div>'
-                 f'<div class="fair">{fair}</div><p class="note">Fair odds are the market’s odds with the bookmaker’s margin removed, not xEdge’s model prices.</p></div></div>')
+                 f'<div class="fair">{fair}</div><p class="note">Fair odds are the market’s odds with the bookmaker’s margin removed.</p></div></div>')
     elif kind == "end":
         body = f'<p class="ebody">{e(sc["body"])}</p>' if sc.get("body") else ""
         inner = (f'<img class="elogo" src="brand/xedge-logo-on-dark.svg" alt="xEdge"><h1 class="fit" data-min="56">{rich_words(sc["title"])}</h1>{body}'

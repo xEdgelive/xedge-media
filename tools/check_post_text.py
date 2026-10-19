@@ -20,7 +20,10 @@ Problems, which stop a post going out as written:
   most characters outside Latin, Greek and Cyrillic, emoji included, as 2).
 
 Warnings are words that are fine in context, such as "guaranteed" used to warn readers off a
-claim, or xEdge "locking" a selection before kickoff. A person, or the routine, judges each one.
+claim. A person, or the routine, judges each one. Post text also gets a warning for "edge":
+since the Option B plan (18 Oct 2026) xEdge never promises one, and the word appears only
+when explaining what CLV measures. (The video and card tools leave "edge" out of their own
+checks, because a video's spoken web address, "ex edge dot live", contains it.)
 
 Standard library only, so it runs before the render tools are installed.
 """
@@ -41,6 +44,8 @@ TEXT_RULES = [
      "carries an AI label, which posts go without since 13 Oct 2026"),
     (r"[\[\]]", "has a square bracket, so a placeholder may be left to fill"),
 ]
+# Flagged in post text only, on top of render_carousel.py's WARN list ("xedge" never matches).
+TEXT_WARN = [r"edges?"]
 
 
 URL = re.compile(r"(?i)\b(?:https?://\S+|(?:[a-z0-9-]+\.)+(?:com|co\.uk|uk|org|net|io|app|live|dev|ai|me|tv)\b(?:/\S*)?)")
@@ -102,7 +107,7 @@ def check(post: dict, bookmakers: list, banned: list, warn: list) -> tuple:
     for pattern, why in TEXT_RULES:
         if re.search(pattern, low):
             problems.append(why)
-    for pattern in warn:
+    for pattern in warn + TEXT_WARN:
         m = re.search(rf"\b{pattern}\b", low)
         if m:
             warnings.append(f"check the context of {m.group(0)!r}")

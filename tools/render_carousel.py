@@ -77,6 +77,8 @@ BANNED = [
     r"cannot lose", r"risk[- ]free", r"no[- ]lose", r"nailed on", r"banker", r"get rich", r"second income",
     r"quit (your|the) job", r"hurry", r"last chance", r"act now", r"don'?t miss", r"today only",
     r"limited time", r"before it'?s too late",
+    # Option B plan, 18 Oct 2026: price wording never adds urgency.
+    r"before it moves", r"before the (odds|prices?) (move|moves|change|changes)",
 ]
 # Allowed in context ("Do they call profit typical or guaranteed? Walk away."), so only flagged.
 WARN = [
