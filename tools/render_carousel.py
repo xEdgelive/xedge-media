@@ -69,6 +69,7 @@ BOOKMAKERS = [
     "midnite", "kwiff", "betuk", "spreadex", "sporting index", "star sports", "quinnbet", "betgoodwin",
     "talksport bet", "betmgm", "bet mgm", "fanteam", "parimatch", "bwin", "sportingbet", "betano",
     "10bet", "dafabet", "pinnacle", "sbobet", "bet442", "betsson", "fitzdares", "tote",
+    "bet goodwin", "quinn bet", "betdaq", "mansionbet", "mansion bet", "netbet",
 ]
 # Never on a card: wording the Rules tab and the CAP Code rule out in any context.
 BANNED = [
@@ -79,7 +80,7 @@ BANNED = [
 ]
 # Allowed in context ("Do they call profit typical or guaranteed? Walk away."), so only flagged.
 WARN = [
-    r"guarantee\w*", r"profits?", r"profitable", r"lock", r"tips?", r"winners?", r"winnings", r"roi",
+    r"guarantee\w*", r"profits?", r"profitable", r"lock(s|ed|ing)?", r"tips?", r"winners?", r"winnings", r"roi",
     r"yield", r"returns?", r"value bets?",
 ]
 

@@ -1,6 +1,6 @@
 # xedge-media
 
-Public images and videos for xEdge's social posts. Buffer only accepts media by public link, so every card and video a post uses is saved here and linked from its raw GitHub address. Nothing here is a post on its own; xEdge's founder approves every post in Buffer before it goes out.
+Public images and videos for xEdge's social posts. Buffer only accepts media by public link, so every card and video a post uses is saved here and linked from its raw GitHub address. Nothing here is a post on its own. The Monday routine schedules its posts in Buffer, where xEdge's founder checks them before they go out, and he approves the Friday drafts himself.
 
 ## What's here
 
