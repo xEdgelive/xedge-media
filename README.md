@@ -9,6 +9,7 @@ Public images and videos for xEdge's social posts. Buffer only accepts media by 
 - `tools/render_carousel.py` makes Instagram carousel slides (1080×1350) from a JSON file of slides, such as `start-here-01.jpg` to `start-here-05.jpg`. It refuses to render if a slide is too long, names a bookmaker, uses banned wording or would overwrite an existing file.
 - `videos/YYYY-MM-DD/` holds the finished explainer videos for TikTok, Reels and Shorts (1080×1920 MP4 with the voiceover) and a cover frame for each.
 - `tools/render_video.py` makes those videos from a JSON file of scenes: animated in xEdge's style in code, voiced by ElevenLabs, with captions timed to the voice. It uses the same wording rules as the carousel tool, and its margin checker scene uses the same maths as the free checker on xedge.live.
+- `tools/check_post_text.py` checks the text of social posts (X posts, threads and captions) against the same wording rules before the Monday routine puts them into Buffer: no bookmaker names or banned wording, no helpline number or AI label in the text, no unfilled [brackets], 18+ where needed and each channel's length limit. It reads the word lists from `render_carousel.py` and needs only the standard library.
 - `brand/` holds the xEdge logo for dark backgrounds. Never retype the wordmark; always use this file.
 - `fonts/` holds Archivo and Geist Mono, both under the SIL Open Font License (see the licence files).
 
