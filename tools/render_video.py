@@ -46,8 +46,8 @@ folder, and holds its caption to the same wording rules as the scenes (and it mu
 - [[Double brackets]] in a title show those words in the brand colour.
 - The checker scene is a copy of the free margin checker on xedge.live, with the same maths
   (the power method), so whatever odds it types give the numbers the real checker shows.
-- Every frame carries 18+ and the helpline; the end card adds xedge.live and the full
-  National Gambling Helpline line.
+- Every frame carries 18+, and the end card adds xedge.live and its own 18+ line. Since 22 Oct 2026
+  the videos carry no helpline (Adam's decision); it stays in the bios and on the website.
 
 It refuses to render if text is too long or doesn't fit, names a bookmaker, uses banned
 wording, or would overwrite a video a post may be using. Softer wording matches are printed
@@ -548,7 +548,7 @@ def scene_html(i: int, sc: dict) -> str:
         body = f'<p class="ebody">{e(sc["body"])}</p>' if sc.get("body") else ""
         inner = (f'<img class="elogo" src="brand/xedge-logo-on-dark.svg" alt="xEdge"><h1 class="fit" data-min="56">{rich_words(sc["title"])}</h1>{body}'
                  '<div class="url">xedge.live</div><div class="esub">FREE MARGIN CHECKER · WAITLIST · UK ONLY</div>'
-                 '<div class="ehelp">18+ · Gambling help:<br>National Gambling Helpline 0808 8020 133</div>')
+                 '<div class="ehelp">18+</div>')
     return f'<section class="scene {kind}" id="s{i}">{inner}</section>'
 
 
@@ -565,7 +565,6 @@ body{font-family:'Archivo',sans-serif;color:var(--chalk);-webkit-font-smoothing:
 #head{position:absolute;left:80px;right:120px;top:196px;height:52px;display:flex;justify-content:space-between;align-items:center}
 #head img{height:46px;display:block}
 .pill{font-family:'Geist Mono';font-weight:500;font-size:24px;letter-spacing:.08em;color:var(--stone);border:2px solid var(--pill);border-radius:999px;padding:8px 18px 7px}
-#help{position:absolute;left:80px;top:272px;font-family:'Geist Mono';font-weight:500;font-size:22px;letter-spacing:.08em;color:var(--label)}
 .scene{position:absolute;left:80px;width:880px;top:350px;height:820px;display:flex;flex-direction:column;justify-content:center;opacity:0;overflow:hidden}
 .kicker{font-family:'Geist Mono';font-weight:500;font-size:28px;letter-spacing:.1em;color:var(--label);margin-bottom:36px;white-space:nowrap}
 h1{font-weight:800;font-stretch:125%;line-height:1.02;letter-spacing:-.012em;font-size:112px}
@@ -654,6 +653,7 @@ function bez(x1,y1,x2,y2){
 }
 const EO=bez(.16,1,.3,1), ES=bez(.2,.9,.3,1);
 const P=(t,a,d)=>clamp((t-a)/d);
+const HELP_IN=0.38, HELP_RISE=0.35;  // the end card's 18+ line: starts rising this long after the card, over this long
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 function rise(el,k,dy=30){ if(!el) return; el.style.opacity=k; el.style.transform=`translateY(${(1-k)*dy}px)`; }
 function fmt(n,k){ return n.pre+(n.num*k).toFixed(n.dec)+n.suf; }
@@ -756,22 +756,25 @@ const U = {
     rise($('.res .note',el),EO(P(t,done+0.6,0.5)),12);
   },
   end(sc,el,t){
-    // Quick build so the whole card (18+ and the helpline included) is settled by about 0.75 s
+    // Quick build so the whole card (its 18+ line included) is settled by about 0.75 s
     // and then holds still until the loop.
     const k=EO(P(t,sc.t0,0.4)); const lg=$('.elogo',el); lg.style.opacity=k; lg.style.transform=`scale(${0.9+0.1*k})`;
     $$('h1 .w',el).forEach((w,i)=>rise(w,EO(P(t,sc.t0+0.06+i*0.03,0.35)),40));
     rise($('.ebody',el),EO(P(t,sc.t0+0.2,0.35)),24);
     rise($('.url',el),EO(P(t,sc.t0+0.25,0.4)),30);
     rise($('.esub',el),EO(P(t,sc.t0+0.32,0.35)),20);
-    rise($('.ehelp',el),EO(P(t,sc.t0+0.38,0.35)),20);
+    rise($('.ehelp',el),EO(P(t,sc.t0+HELP_IN,HELP_RISE)),20);
   },
 };
 const esc=s=>s.replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function seek(t){
   $('#bg').style.transform=`translateY(${-((t*14)%120)}px)`;
   const endSc=D.scenes[D.scenes.length-1];
-  const ha=1-EO(P(t,endSc.t0-0.1,0.35));
-  $('#head').style.opacity=ha; $('#help').style.opacity=ha;
+  // The header logo makes way for the end card's. The header's 18+ stays until the end card's own 18+
+  // line has fully risen, so every frame shows 18+.
+  $('#head img').style.opacity=1-EO(P(t,endSc.t0-0.1,0.35));
+  const ha=1-EO(P(t,endSc.t0+HELP_IN+HELP_RISE,0.35));
+  $('#head .pill').style.opacity=ha;
   D.scenes.forEach((sc,i)=>{
     const el=document.getElementById('s'+i);
     const last=i===D.scenes.length-1;
@@ -819,7 +822,6 @@ def page_html(scenes: list, data: dict) -> str:
     return (f'<!doctype html><html><head><meta charset="utf-8"><style>{CSS}</style></head><body>'
             '<div id="bg"></div><div id="vig"></div>'
             '<div id="head"><img src="brand/xedge-logo-on-dark.svg" alt="xEdge"><div class="pill">18+</div></div>'
-            '<div id="help">GAMBLING HELP · 0808 8020 133</div>'
             f'{body}<div id="cap"></div><script>{JS.replace("__DATA__", payload)}</script></body></html>')
 
 

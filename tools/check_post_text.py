@@ -13,7 +13,7 @@ Problems, which stop a post going out as written:
 - a bookmaker's or exchange's name, or wording that is banned in any context (the same lists
   render_carousel.py uses for the cards, read from that file so they never drift apart);
 - the helpline number or an AI label in the text (left out of captions since 13 Oct 2026; the
-  helpline stays on the cards, the video frames and the bios);
+  helpline stays in the bios and on the website, and is off the cards and video frames since 22 Oct 2026);
 - a square bracket, which usually means a [placeholder] was never filled in;
 - no "18+" where needs_18 is true, an empty text, or more characters than the channel allows
   (2,200 on Instagram and TikTok; 280 on X, counted X's way: every link as 23 characters and

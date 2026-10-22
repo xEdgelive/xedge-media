@@ -28,7 +28,7 @@ It prints the two file paths and the image's alt text. The figures JSON stays ou
 python3 tools/render_carousel.py /path/outside/repo/slides.json cards/2026-10-12 --name odds-are-chances
 ```
 
-The slide types (cover, text, number, list and end) and the JSON format are described at the top of the script. Every slide gets the 18+ badge and the helpline, and the end slide adds xedge.live. It prints the file paths, each slide's alt text and any wording a person should double-check against the Rules tab.
+The slide types (cover, text, number, list and end) and the JSON format are described at the top of the script. Every slide gets the 18+ badge, and the end slide adds xedge.live (no helpline since 22 Oct 2026). It prints the file paths, each slide's alt text and any wording a person should double-check against the Rules tab.
 
 ## Making a receipt card
 
@@ -44,7 +44,7 @@ The JSON gives a market, its 2 or 3 example prices, the outcome the receipt is f
 python3 tools/render_video.py /path/outside/repo/scenes.json videos/2026-10-11 --name the-4-8-you-never-see --work /path/outside/repo/work
 ```
 
-The scene types (hook, text, prices, sum, number, compare, list, checker and end) and the JSON format are described at the top of the script. Every frame shows 18+ and the helpline, and the end card adds xedge.live and the full National Gambling Helpline line. Add `--preview` for a silent draft with guessed timings, or `--stills 1.5,9,20` to look at single frames; both write only into the work folder.
+The scene types (hook, text, prices, sum, number, compare, list, checker and end) and the JSON format are described at the top of the script. Every frame shows 18+, and the end card adds xedge.live and its own 18+ line (no helpline since 22 Oct 2026). Add `--preview` for a silent draft with guessed timings, or `--stills 1.5,9,20` to look at single frames; both write only into the work folder.
 
 The voice is Chris on ElevenLabs' Eleven v4, recorded as one continuous take of the whole script and timed to the word, so the captions and animation follow it. The API key is stored as an API credential on the Claude cloud environment, for `api.elevenlabs.io`, so it is never in this repo, a file or a command. The take is cached in the work folder, so a re-render costs no credits. A 30-second video uses about 400 characters of voice.
 
@@ -55,5 +55,5 @@ It needs Python with `playwright` and `pillow`, a Chromium browser and ffmpeg. W
 ## Rules for this repo
 
 - Keep it to finished images and videos, the tools that make them and brand files. No raw odds, price snapshots or figure files: The Odds API's terms don't allow redistributing its data as downloadable files.
-- Never name a bookmaker on a card or in a video. Every card and video about prices says 18+ and gives the National Gambling Helpline, 0808 8020 133.
+- Never name a bookmaker on a card or in a video. Every card and video about prices says 18+. Since 22 Oct 2026 (Adam's decision) cards and videos carry no helpline; it stays in the bios and on the website.
 - Don't delete or rename a card or video after a post uses it. Buffer fetches the file when the post publishes, so the link has to keep working.

@@ -23,7 +23,8 @@ slides.json (keep it outside this repo):
 - [[Double brackets]] in a title or a number slide's number mark words to show in the
   brand colour. In "math", everything after the last "=" is highlighted.
 - Any slide may carry "note": one line of small print, such as where prices came from.
-- Every slide gets the 18+ badge and the helpline. The end slide adds xedge.live.
+- Every slide gets the 18+ badge, and the end slide adds xedge.live. Since 22 Oct 2026 the slides
+  carry no helpline (Adam's decision); it stays in the bios and on the website.
 
 It refuses to render if a slide is too long, names a bookmaker or uses banned wording,
 or if a file of the same name already exists (a post may be using it). Softer wording
@@ -201,8 +202,7 @@ def slide_html(s: dict, n: int, total: int) -> str:
         inner.append('<div class="cta"><div class="url">xedge.live</div>'
                      '<div class="sub">FREE MARGIN CHECKER · WAITLIST · UK ONLY</div></div>')
     note = f'<div class="note">{e(s["note"])}</div>' if s.get("note") else ""
-    help_line = ("18+ · Gambling help: National Gambling Helpline 0808 8020 133" if kind == "end"
-                 else "18+ · Gambling help: 0808 8020 133")
+    help_line = "18+"
     return f"""<!doctype html><html><head><meta charset="utf-8"><style>
 @font-face{{font-family:'Archivo';src:url('fonts/archivo-variable.woff2') format('woff2-variations');font-weight:100 900;font-stretch:62% 125%}}
 @font-face{{font-family:'Geist Mono';src:url('fonts/geist-mono-400.woff2') format('woff2');font-weight:400}}
@@ -289,7 +289,7 @@ def alt_text(s: dict, n: int, total: int) -> str:
     if s["type"] == "end":
         bits.append("Free margin checker and waitlist at xedge.live")
     text = " ".join(b.strip() if b.strip()[-1] in ".?!" else b.strip() + "." for b in bits if b and b.strip())
-    return f"Slide {n} of {total}. {text} 18+. Gambling help: 0808 8020 133."
+    return f"Slide {n} of {total}. {text} 18+."
 
 
 def render_all(slides: list, paths: list) -> None:

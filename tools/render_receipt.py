@@ -32,7 +32,8 @@ It refuses a margin outside 0.5% to 30%, a bookmaker's name, wording that is ban
 context (the same lists render_carousel.py uses, imported from it so they never drift apart),
 text that is too long, and an output file that already exists (a post may be using it).
 Softer wording matches are printed as warnings for a person to check against the Rules tab.
-Every card gets the 18+ badge, the full National Gambling Helpline line and xedge.live.
+Every card gets the 18+ badge and xedge.live. Since 22 Oct 2026 the cards carry no helpline
+(Adam's decision); it stays in the bios and on the website.
 """
 import argparse
 import html
@@ -194,7 +195,7 @@ def alt_text(f: dict) -> str:
             f"stake {pounds(f['stake'])}. If it wins, you're paid {pounds(f['payout'])}. Paid at the fair price: "
             f"{pounds(f['fair_payout'])}. Kept as margin: {pounds(f['kept'])}{line}. Example prices: {listed}. "
             f"Fair price {f['fair_price']:.3f}, with the margin taken out by the power method. "
-            f"18+. Gambling help: National Gambling Helpline 0808 8020 133.")
+            f"18+.")
 
 
 def zigzag(top: bool) -> str:
@@ -272,7 +273,7 @@ h1{{font-weight:800;font-stretch:125%;line-height:1.04;letter-spacing:-.01em;fon
 </div>{zigzag(False)}</div>
 </div>
 <div class="note">{e(example_note(f))}</div>
-<div class="foot"><span>18+ · Gambling help: National Gambling Helpline 0808 8020 133</span><span class="site">xedge.live</span></div>
+<div class="foot"><span>18+</span><span class="site">xedge.live</span></div>
 </div></body></html>"""
 
 

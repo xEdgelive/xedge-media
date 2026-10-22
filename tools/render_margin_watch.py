@@ -64,7 +64,7 @@ SHORT = {
 }
 
 # Story padding keeps everything out of the top and bottom 270px, where Instagram's
-# profile bar and reply box sit, so the 18+ and helpline lines are never covered.
+# profile bar and reply box sit, so the 18+ line is never covered.
 FORMATS = {
     "feed": {"w": 1080, "h": 1350, "row": 56, "pt": 60, "pb": 54},
     "story": {"w": 1080, "h": 1920, "row": 58, "pt": 270, "pb": 270},
@@ -213,7 +213,7 @@ h1{{font-weight:800;font-stretch:125%;font-size:54px;line-height:1.06;margin-top
 <div class="key"><span><i class="kd"></i>Average across bookmakers</span><span><i class="kl"></i>Lowest to highest bookmaker</span></div>
 </div>
 <div class="foot">Prices at {e(d["captured_uk"])} from {d["bookmakers"]} UK-licensed bookmakers ({e(d["source"])}). Margin = home, draw and away implied chances added up, minus 100%. Prices may have changed.
-<div class="r2"><span>18+ · Gambling help: National Gambling Helpline 0808 8020 133</span><span>xedge.live</span></div></div>
+<div class="r2"><span>18+</span><span>xedge.live</span></div></div>
 </div></body></html>"""
 
 
