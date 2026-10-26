@@ -20,7 +20,7 @@ spec.json (keep it outside this repo):
      "say": "Every football match has a hidden fee."},
     {"type": "prices", "kicker": "ONE MATCH'S ODDS · EXAMPLE", "to_kicker": "AS A CHANCE",
      "tiles": [{"label": "HOME", "value": "11/10", "sub": "2.10", "to": "47.6%", "to_sub": "1 ÷ 2.10"}, ...],
-     "say": "These are one match's odds: {1}[11/10|eleven-to-ten], ... Turn each into a chance: {4}47.6, ..."},
+     "say": "These are one match's odds: {1}[11/10|eleven to ten], {2}[12/5|twelve to five] and {3}[13/5|thirteen to five]. As chances, that's {4}47.6, {5}29.4 and {6}27.8%."},
     {"type": "sum", "kicker": "ADD THEM UP", "values": ["47.6%", "29.4%", "27.8%"], "total": "104.8%",
      "say": "Add them up and you get {1}104.8. {2}A fair book adds up to 100."},
     {"type": "number", "number": "4.8%", "title": "The bookmaker's margin", "body": "Built into every price", "say": "..."},
@@ -40,7 +40,10 @@ folder, and holds its caption to the same wording rules as the scenes (and it mu
 - 3 to 9 scenes. The first must be a hook and the last an end card. Every scene but the end card has a voice line.
 - In "say", [shown|spoken] puts one thing in the captions and has the voice say another (fractional
   odds, the web address). {1}, {2} ... mark the moments the animation steps forward: tiles
-  appearing then converting, a total landing, bars growing, list items appearing.
+  appearing then converting, a total landing, bars growing, list items appearing. A prices scene
+  whose tiles convert needs a beat as each tile appears and another as each one converts: {1} to
+  {6} for three tiles, {1} to {4} for two. A tile without its converting beat never converts, so the
+  tool refuses a prices scene that's short of beats.
 - Write numbers as digits ("47.6", "104.8%"); Eleven v4 reads them naturally. Fractional odds and the
   web address still need [shown|spoken]: [11/10|eleven to ten], [xedge.live|ex edge dot live].
 - [[Double brackets]] in a title show those words in the brand colour.
@@ -308,6 +311,11 @@ def check(d: dict) -> tuple:
                 problems.append(f"scene {n}: beats must be numbered {{1}}, {{2}} ... in order")
             if p["beats"] and want and len(p["beats"]) > want:
                 problems.append(f"scene {n}: {len(p['beats'])} beats but this scene uses at most {want}")
+            converting = [t for t in sc.get("tiles") or [] if isinstance(t, dict) and t.get("to")]
+            if kind == "prices" and converting and len(p["beats"]) < want:
+                problems.append(f"scene {n}: its {len(converting)} tiles convert, so say needs {{1}} to {{{want}}}: "
+                                f"a beat as each tile appears and another as each one converts. It has "
+                                f"{len(p['beats'])}, and a tile without its converting beat never converts")
         text = plain(" ".join(texts_in(sc))).lower().replace("’", "'").replace("‘", "'")
         for name in BOOKMAKERS:
             if re.search(rf"(?<![a-z0-9]){re.escape(name)}(?![a-z0-9])", text):
