@@ -52,11 +52,61 @@ folder, and holds its caption to the same wording rules as the scenes (and it mu
 - Every frame carries 18+, and the end card adds xedge.live and its own 18+ line. Since 22 Oct 2026
   the videos carry no helpline (Adam's decision); it stays in the bios and on the website.
 
+Football scenes (added 13 Nov 2026 with the creative upgrade): a moving football picture under the hook, and
+four scene types drawn on a dark xEdge pitch. Old scene files don't use them, so they render exactly as before.
+FOOTBALL_SCENES below switches all of them off at once; the checker then refuses them.
+    {"type": "hook", "title": "Same match. Why [[two prices?]]", "say": "...", "visual": "pitch"},
+    {"type": "pitch_story", "kicker": "ILLUSTRATION · ONE ATTACK", "title": "One chance. [[Two outcomes.]]",
+     "pitch_view": "half", "players": [{"side": "home", "x": 0.3, "y": 0.4}, {"side": "away", "x": 0.6, "y": 0.55}],
+     "ball_path": [[0.3, 0.4], [0.62, 0.7], [0.99, 0.48]], "focus": "ball",
+     "say": "A pass{1} out wide, then a shot{2} into the corner."},
+    {"type": "match_compare", "kicker": "ONE OUTCOME · EXAMPLE", "title": "Same match. [[Two prices.]]",
+     "outcome": "Home win", "offers": [{"label": "A", "decimal_odds": 2.50}, {"label": "B", "decimal_odds": 2.75}],
+     "say": "One price{1} is 2.50, another{2} is 2.75. As chances{3}, that's 40 and 36.4%.{4} A 3.6 point gap."},
+    {"type": "probability_pitch", "kicker": "A ONE IN FIVE CHANCE", "title": "A chance [[isn't a goal]]",
+     "probability": 0.2, "trials": 10, "say": "Give ten shots{1} a one in five chance each.{2} About two go in."},
+    {"type": "football_stat", "kicker": "SAMPLE SIZE", "title": "60% [[of what?]]", "numerator": 6,
+     "denominator": 10, "of_what": "matches", "say": "Six{1} out of ten matches{2} is 60%. Ten is a small sample."},
+- "visual" on the hook (optional): "pitch" (the attacking third of a pitch, a passing move drawing a lime trail)
+  or "goal" (a goal seen from the front, a shot flying at it). It moves from the first frame, under the title,
+  and shows on the cover. Leave it out for the plain hook.
+- pitch_story is always tagged ILLUSTRATION: never a real match, real players or tracking data. pitch_view "half"
+  (the default) is the attacking half upright, goal at the top: x 0 is the halfway line and 1 the goal line, y 0 the
+  left touchline and 1 the right. "full" is the whole pitch on its side: x 0 the left goal line and 1 the goal
+  attacked on the right, y 0 the top touchline and 1 the bottom. Every coordinate is 0 to 1. players: up to 22
+  markers, "home" solid or "away" ringed, each with an optional "id" (up to 4 lowercase letters or digits, unique).
+  ball_path: 2 to 16 points, each at least half a metre from the one before; the ball travels it pass by pass and
+  leaves a lime trail. {1}, {2} ... start each pass; without them the passes follow one another. Put the last beat
+  a second or more before the line ends: the ball always arrives before the scene moves on, so a late last pass
+  is rushed. A path ending in
+  the goal mouth ("half": x 0.99 or more; "full": 0.995 or more; y 0.447 to 0.553) lights the net. focus: "ball"
+  (the camera follows the ball; the default), "goal" (it eases towards the goal) or "none" (it stays still).
+- match_compare puts 2 or 3 prices for one outcome side by side, turns each into its raw implied chance (100 ÷ decimal
+  odds, worked out here: 2.50 shows 40.0%, 2.75 shows 36.4%) and shows the gap between the highest and lowest in
+  percentage points (3.6, worked out from the unrounded chances). It's labelled raw implied, never fair: the
+  bookmaker's margin is still in it. Prices are decimal numbers from 1.01 to 100 with at most 2 decimal places, all
+  different; labels up to 8 characters (never a bookmaker's name). {1} to {n} bring in each price, {n+1} turns them
+  into chances, {n+2} shows the gap. "source_status" is "example" (the default: labelled EXAMPLE PRICES, the match
+  shown as EXAMPLE MATCH unless "match_label" says otherwise) or "real", which needs "match_label", "source" and
+  "date" (YYYY-MM-DD) and shows them.
+- probability_pitch fires "trials" shots (2 to 20) at a goal, each with chance "probability" (between 0 and 1).
+  Exactly probability × trials of them go in, so that must be a whole number (0.2 × 10 = 2). It's always tagged
+  TOY EXAMPLE, NOT REAL DATA. {1} starts the shots, {2} shows the split (20% goal, 80% no goal).
+- football_stat shows numerator ÷ denominator as a percentage (worked out here; "decimals" 0, the default, or 1) above
+  a grid of that many small pitches with numerator of them lit, and "6 OF 10 MATCHES". denominator 1 to 100;
+  of_what is the plural noun (up to 20 characters). "source_status" is "example" (the default, tagged EXAMPLE, NOT
+  REAL DATA) or "real", which needs "source", "date" (YYYY-MM-DD), "competition", "window" (the period counted) and
+  "definition" (what was counted), all shown. {1} brings in the grid, {2} lights the matches.
+- In every football scene, the figures on screen are worked out by this tool from the numbers given; write the
+  voice line to match them (40 and 36.4, not 40 and 36).
+
 It refuses to render if text is too long or doesn't fit, names a bookmaker, uses banned
 wording, or would overwrite a video a post may be using. Softer wording matches are printed
 as warnings for a person to check against the Rules tab.
 """
 import argparse
+import datetime
+import decimal
 import hashlib
 import html
 import json
@@ -120,6 +170,26 @@ REQUIRED = {"hook": ["title", "say"], "text": ["title", "say"], "prices": ["tile
 EXTRA_KEYS = {"prices": {"tiles"}, "sum": {"values"}, "compare": {"bars"}, "list": {"items"}, "checker": {"odds"}}
 TOKEN = re.compile(r"\{(\d)\}|\[([^\[\]|]+)\|([^\[\]|]+)\]")
 
+# Football scenes (the creative upgrade, 13 Nov 2026). They're opt-in: a scene file only gets them by asking for one
+# of these types, or a hook "visual". False switches them all off; the checker then refuses them, and nothing else
+# changes.
+FOOTBALL_SCENES = True
+FOOTBALL_KINDS = ("pitch_story", "match_compare", "probability_pitch", "football_stat")
+HOOK_VISUALS = ("pitch", "goal")
+LIMITS.update({
+    "pitch_story": {"kicker": 32, "title": 50, "say": 300},
+    "match_compare": {"kicker": 32, "title": 50, "match_label": 28, "outcome": 18, "source": 40, "date": 10, "say": 300},
+    "probability_pitch": {"kicker": 32, "title": 50, "say": 300},
+    "football_stat": {"kicker": 32, "title": 50, "of_what": 20, "source": 40, "date": 10, "competition": 30,
+                      "window": 30, "definition": 60, "say": 300},
+})
+# Numbers (probability, trials, numerator, denominator) are checked as numbers below, not here: 0 is a real value.
+REQUIRED.update({"pitch_story": ["title", "ball_path", "say"], "match_compare": ["title", "outcome", "offers", "say"],
+                 "probability_pitch": ["title", "say"], "football_stat": ["title", "of_what", "say"]})
+EXTRA_KEYS.update({"hook": {"visual"}, "pitch_story": {"pitch_view", "players", "ball_path", "focus"},
+                   "match_compare": {"offers", "source_status"}, "probability_pitch": {"probability", "trials"},
+                   "football_stat": {"numerator", "denominator", "decimals", "source_status"}})
+
 
 # ---------------------------------------------------------------- checks
 
@@ -168,6 +238,13 @@ def texts_in(sc: dict) -> list:
     out += [str(i) for i in sc.get("items", []) or []]
     for b in sc.get("bars", []) or []:
         out += [str(b.get("label", "")), str(b.get("value", ""))]
+    if sc.get("type") in FOOTBALL_KINDS:
+        out += [str(sc.get(k, "")) for k in ("match_label", "outcome", "of_what", "source", "competition", "window",
+                                             "definition")]
+        offers = sc.get("offers")
+        for o in offers if isinstance(offers, list) else []:
+            if isinstance(o, dict):
+                out.append(str(o.get("label", "")))
     if sc.get("say"):
         p = parse_say(sc["say"])
         out += [p["display"], p["spoken"]]
@@ -301,12 +378,16 @@ def check(d: dict) -> tuple:
                     raise ValueError
             except ValueError:
                 problems.append(f"scene {n}: checker needs three odds, decimal (2.10) or fractional (11/10)")
+        if kind in FOOTBALL_KINDS or (kind == "hook" and "visual" in sc):
+            check_football(n, kind, sc, problems)
         if sc.get("say"):
             p = parse_say(sc["say"])
             if re.search(r"[\[\]{}|]", p["display"]):
                 problems.append(f"scene {n}: say has a stray bracket or bar; use [shown|spoken] and {{1}}")
             want = {"prices": 2 * len(sc.get("tiles") or []) if any(isinstance(t, dict) and t.get("to") for t in sc.get("tiles") or []) else len(sc.get("tiles") or []),
                     "sum": 2, "compare": len(sc.get("bars") or []), "list": len(sc.get("items") or [])}.get(kind)
+            if kind in FOOTBALL_KINDS:
+                want = football_beats(kind, sc)
             if p["beats"] and want and sorted(p["beats"]) != list(range(1, len(p["beats"]) + 1)):
                 problems.append(f"scene {n}: beats must be numbered {{1}}, {{2}} ... in order")
             if p["beats"] and want and len(p["beats"]) > want:
@@ -347,6 +428,349 @@ def checker_numbers(odds: list) -> dict:
     fair = [x ** k for x in p] if margin > 0 else [x / sum(p) for x in p]
     return {"margin": f"{margin * 100:.1f}%", "fair": [f"{1 / q:.2f}" for q in fair],
             "prob": [f"{q * 100:.1f}%" for q in fair], "under": margin <= 0}
+
+
+# ---------------------------------------------------------------- football scenes
+
+PITCH_L, PITCH_W, GOAL_HALF = 105.0, 68.0, 3.66  # metres: pitch length and width, half the goal's width
+PITCH_VIEWBOX = {"half": (-4.0, -4.5, 76.0, 61.5), "full": (-4.5, -4.0, 114.0, 76.0)}
+# The hook's "pitch" picture: the attacking third of the half pitch and a fixed passing move.
+HOOK_PITCH = {"pitch_view": "half", "focus": "ball",
+              "players": [{"side": "home", "x": 0.5, "y": 0.22}, {"side": "home", "x": 0.72, "y": 0.68},
+                          {"side": "home", "x": 0.63, "y": 0.42}, {"side": "away", "x": 0.6, "y": 0.56},
+                          {"side": "away", "x": 0.8, "y": 0.6}, {"side": "away", "x": 0.85, "y": 0.4},
+                          {"side": "away", "x": 0.97, "y": 0.5}],
+              "ball_path": [[0.5, 0.22], [0.72, 0.68], [0.9, 0.53]]}
+HOOK_PITCH_VIEWBOX = (-4.0, -4.5, 76.0, 34.0)
+GOAL_BOX = (140.0, 66.0, 600.0, 200.0)  # probability_pitch: the goal in its 880 x 440 drawing, 600 px for 7.32 m
+SHOT_FROM = (440.0, 404.0)
+MINI_PITCH = ('<svg class="mini" viewBox="0 0 66 44"><rect x="1.5" y="1.5" width="63" height="41" rx="3"/>'
+              '<line x1="33" y1="1.5" x2="33" y2="42.5"/><circle cx="33" cy="22" r="7"/></svg>')
+
+
+def is_num(v) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def is_int(v) -> bool:
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def valid_date(v) -> bool:
+    if not (isinstance(v, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", v)):
+        return False
+    try:
+        datetime.date.fromisoformat(v)
+        return True
+    except ValueError:
+        return False
+
+
+def pitch_point(view: str, x: float, y: float) -> tuple:
+    """A 0-to-1 pitch position as metres in the drawing (pitch_view in the notes at the top says which way up)."""
+    if view == "full":
+        return (x * PITCH_L, y * PITCH_W)
+    return (y * PITCH_W, (1 - x) * PITCH_L / 2)
+
+
+def path_ok(path) -> bool:
+    return (isinstance(path, list) and 2 <= len(path) <= 16 and
+            all(isinstance(p, list) and len(p) == 2 and all(is_num(c) and 0 <= c <= 1 for c in p) for p in path))
+
+
+def check_football(n: int, kind: str, sc: dict, problems: list) -> None:
+    """The football scenes' own checks. The shared ones (lengths, wording, beats) run for them as well."""
+    if not FOOTBALL_SCENES:
+        what = "hook visuals" if kind == "hook" else f"{kind} scenes"
+        problems.append(f"scene {n}: {what} are switched off (FOOTBALL_SCENES in tools/render_video.py)")
+        return
+    if kind == "hook":
+        if sc["visual"] not in HOOK_VISUALS:
+            problems.append(f'scene {n}: visual must be "pitch" or "goal"')
+    elif kind == "pitch_story":
+        view = sc.get("pitch_view", "half")
+        if view not in ("half", "full"):
+            problems.append(f'scene {n}: pitch_view must be "half" or "full"')
+            view = "half"
+        if sc.get("focus", "ball") not in ("ball", "goal", "none"):
+            problems.append(f'scene {n}: focus must be "ball", "goal" or "none"')
+        players = sc.get("players", [])
+        if not isinstance(players, list) or len(players) > 22:
+            problems.append(f"scene {n}: players must be a list of up to 22 markers")
+            players = []
+        ids = []
+        for i, pl in enumerate(players, 1):
+            if not isinstance(pl, dict) or set(pl) - {"id", "side", "x", "y"}:
+                problems.append(f"scene {n}: player {i} can only have side, x, y and id")
+                continue
+            if pl.get("side") not in ("home", "away"):
+                problems.append(f'scene {n}: player {i} side must be "home" or "away"')
+            if not all(is_num(pl.get(c)) and 0 <= pl[c] <= 1 for c in ("x", "y")):
+                problems.append(f"scene {n}: player {i} needs x and y, numbers from 0 to 1")
+            if "id" in pl:
+                if not (isinstance(pl["id"], str) and re.fullmatch(r"[a-z0-9]{1,4}", pl["id"])):
+                    problems.append(f"scene {n}: player {i} id must be 1 to 4 lowercase letters or digits")
+                ids.append(str(pl["id"]))
+        if len(ids) != len(set(ids)):
+            problems.append(f"scene {n}: player ids must be different")
+        path = sc.get("ball_path")
+        if not path_ok(path):
+            problems.append(f"scene {n}: ball_path needs 2 to 16 points, each [x, y] with numbers from 0 to 1")
+        else:
+            pts = [pitch_point(view, *p) for p in path]
+            for i, (a, b) in enumerate(zip(pts, pts[1:]), 2):
+                if math.dist(a, b) < 0.5:
+                    problems.append(f"scene {n}: ball_path point {i} is under half a metre from the one before")
+    elif kind == "match_compare":
+        offers = sc.get("offers")
+        if not isinstance(offers, list) or not 2 <= len(offers) <= 3:
+            problems.append(f"scene {n}: match_compare needs 2 or 3 offers")
+        else:
+            good = []
+            for i, o in enumerate(offers, 1):
+                if not isinstance(o, dict) or set(o) != {"label", "decimal_odds"}:
+                    problems.append(f"scene {n}: offer {i} needs a label and decimal_odds, and nothing else")
+                    continue
+                if not isinstance(o["label"], str) or not 1 <= len(o["label"].strip()) <= 8:
+                    problems.append(f"scene {n}: offer {i} label must be 1 to 8 characters")
+                d = o["decimal_odds"]
+                if not is_num(d) or not 1.01 <= d <= 100 or abs(round(d, 2) - d) > 1e-9:
+                    problems.append(f"scene {n}: offer {i} decimal_odds must be a number from 1.01 to 100 with at most 2 decimal places")
+                else:
+                    good.append(round(d, 2))
+            labels = [str(o.get("label", "")).strip().lower() for o in offers if isinstance(o, dict)]
+            if len(set(labels)) != len(labels):
+                problems.append(f"scene {n}: offer labels must be different")
+            if len(set(good)) != len(good):
+                problems.append(f"scene {n}: the offers must have different prices")
+        source_rules(n, sc, ("match_label", "source", "date"), problems)
+    elif kind == "probability_pitch":
+        p, k = sc.get("probability"), sc.get("trials")
+        if not (is_num(p) and 0 < p < 1):
+            problems.append(f"scene {n}: probability must be a number between 0 and 1, such as 0.2")
+        if not (is_int(k) and 2 <= k <= 20):
+            problems.append(f"scene {n}: trials must be a whole number from 2 to 20")
+        elif is_num(p) and abs(p * k - round(p * k)) > 1e-9:
+            problems.append(f"scene {n}: probability × trials must be a whole number ({p:g} × {k} = {p * k:g}), "
+                            "so the picture shows exactly that many goals")
+    elif kind == "football_stat":
+        num, den = sc.get("numerator"), sc.get("denominator")
+        if not (is_int(den) and 1 <= den <= 100):
+            problems.append(f"scene {n}: denominator must be a whole number from 1 to 100")
+        if not (is_int(num) and num >= 0):
+            problems.append(f"scene {n}: numerator must be a whole number, 0 or more")
+        elif is_int(den) and num > den:
+            problems.append(f"scene {n}: numerator can't be more than denominator")
+        if "decimals" in sc and not (is_int(sc["decimals"]) and sc["decimals"] in (0, 1)):
+            problems.append(f"scene {n}: decimals must be 0 or 1")
+        source_rules(n, sc, ("source", "date", "competition", "window", "definition"), problems)
+
+
+def source_rules(n: int, sc: dict, needed: tuple, problems: list) -> None:
+    """Example figures are labelled as examples; real ones must say where they come from."""
+    status = sc.get("source_status", "example")
+    if status not in ("example", "real"):
+        problems.append(f'scene {n}: source_status must be "example" or "real"')
+    elif status == "real":
+        for key in needed:
+            if not sc.get(key):
+                problems.append(f'scene {n}: real figures (source_status "real") need {key}')
+        if sc.get("date") and not valid_date(sc["date"]):
+            problems.append(f"scene {n}: date must be a real date written YYYY-MM-DD")
+    else:
+        extra = [k for k in needed if k != "match_label" and sc.get(k)]
+        if extra:
+            problems.append(f'scene {n}: {", ".join(extra)} {"is" if len(extra) == 1 else "are"} only for real '
+                            'figures (source_status "real")')
+
+
+def football_beats(kind: str, sc: dict):
+    """How many {1}, {2} ... beats a football scene uses (None when its data is broken: other checks say so)."""
+    if kind == "pitch_story":
+        return len(sc["ball_path"]) - 1 if path_ok(sc.get("ball_path")) else None
+    if kind == "match_compare":
+        offers = sc.get("offers")
+        return len(offers) + 2 if isinstance(offers, list) and 2 <= len(offers) <= 3 else None
+    return 2
+
+
+def pct_text(value: decimal.Decimal, places: int) -> str:
+    """A percentage for the screen, rounded half up only here, at the end."""
+    return f"{value.quantize(decimal.Decimal(1).scaleb(-places), rounding=decimal.ROUND_HALF_UP)}%"
+
+
+def compare_numbers(sc: dict) -> dict:
+    """Each price's raw implied chance (100 ÷ decimal odds) and the gap between the highest and lowest chance in
+    percentage points, worked out at full precision: 2.50 gives 40.0%, 2.75 gives 36.4% and the gap is 3.6."""
+    raws = [decimal.Decimal(100) / decimal.Decimal(f"{o['decimal_odds']:.2f}") for o in sc["offers"]]
+    hi = max(range(len(raws)), key=lambda i: raws[i])
+    lo = min(range(len(raws)), key=lambda i: raws[i])
+    return {"offers": [{"label": o["label"].strip(), "odds": f"{o['decimal_odds']:.2f}", "raw": float(r),
+                        "rawText": pct_text(r, 1)} for o, r in zip(sc["offers"], raws)],
+            "gap": {"hi": hi, "lo": lo, "text": pct_text(raws[hi] - raws[lo], 1)[:-1]}}
+
+
+def stat_numbers(sc: dict) -> dict:
+    num, den, places = sc["numerator"], sc["denominator"], sc.get("decimals", 0)
+    pct = decimal.Decimal(100 * num) / decimal.Decimal(den)
+    return {"num": num, "den": den, "pct": float(pct), "dec": places, "text": pct_text(pct, places)}
+
+
+def stat_grid(den: int, width: float = 880, height: float = 300) -> dict:
+    """Columns and size for den small upright pitches, as large as fits in width x height (at most 104 px wide)."""
+    best = None
+    for cols in range(1, min(den, 25) + 1):
+        rows = math.ceil(den / cols)
+        gap = 14 if cols <= 10 else 8
+        w = min((width - (cols - 1) * gap) / cols, (height - (rows - 1) * gap) / rows / 1.45, 104)
+        if best is None or w > best["w"] + 1e-9:
+            best = {"cols": cols, "rows": rows, "gap": gap, "w": w}
+    best["h"] = best["w"] * 1.45
+    return best
+
+
+def short_pct(p: float) -> str:
+    """0.2 -> "20%", 1/3 -> "33.3%"."""
+    t = pct_text(decimal.Decimal(repr(p)) * 100, 1)
+    return t.replace(".0%", "%")
+
+
+def curve_lengths(o: tuple, c: tuple, i: tuple, steps: int = 24) -> list:
+    """Distance along a quadratic curve at each of steps + 1 even parameter values, so a trail's tip stays on the ball."""
+    pts = [((1 - u) ** 2 * o[0] + 2 * (1 - u) * u * c[0] + u * u * i[0],
+            (1 - u) ** 2 * o[1] + 2 * (1 - u) * u * c[1] + u * u * i[1]) for u in (k / steps for k in range(steps + 1))]
+    out = [0.0]
+    for a, b in zip(pts, pts[1:]):
+        out.append(out[-1] + math.dist(a, b))
+    return [round(v, 1) for v in out]
+
+
+def shot_plan(sc: dict) -> dict:
+    """Where each of the toy shots lands. Exactly probability × trials go in, spread evenly through the run (never
+    all at the end), at fixed positions: no randomness, so every render is the same."""
+    n = sc["trials"]
+    k = round(sc["probability"] * n)
+    gx, gy, gw, gh = GOAL_BOX
+    shots, gj, mj = [], 0, 0
+    for i in range(n):
+        goal = math.floor((i + 1) * k / n + 0.5) > math.floor(i * k / n + 0.5)
+        if goal:
+            u, v = (0.31 + 0.618034 * gj) % 1, (0.57 + 0.414214 * gj) % 1
+            gj += 1
+            ix, iy = gx + 50 + u * (gw - 100), gy + 36 + v * (gh - 72)
+        else:
+            u, side = (0.17 + 0.618034 * mj) % 1, mj % 3
+            mj += 1
+            if side == 0:
+                ix, iy = gx - 40 - u * 50, gy + 40 + (1 - u) * 140   # wide of the left post
+            elif side == 1:
+                ix, iy = gx + 70 + u * (gw - 140), gy - 34 - u * 18   # over the bar
+            else:
+                ix, iy = gx + gw + 40 + u * 50, gy + 40 + u * 140      # wide of the right post
+        c = ((SHOT_FROM[0] + ix) / 2 + (ix - SHOT_FROM[0]) * 0.1, iy - 70)
+        shots.append({"goal": goal, "ix": round(ix, 1), "iy": round(iy, 1), "cx": round(c[0], 1), "cy": round(c[1], 1),
+                      "cl": curve_lengths(SHOT_FROM, c, (ix, iy))})
+    return {"n": n, "k": k, "p": sc["probability"], "from": list(SHOT_FROM), "pText": short_pct(sc["probability"]),
+            "qText": short_pct(1 - sc["probability"]) if k < n else "0%", "list": shots}
+
+
+def pitch_geometry(sc: dict, viewbox: tuple | None = None, lead: float = 0.5) -> dict:
+    """Everything the pitch drawing and its animation need, in metres in the drawing."""
+    view = sc.get("pitch_view", "half")
+    pts = [pitch_point(view, float(x), float(y)) for x, y in sc["ball_path"]]
+    lens = [math.dist(a, b) for a, b in zip(pts, pts[1:])]
+    x, y = sc["ball_path"][-1]
+    in_goal = x >= (0.995 if view == "full" else 0.99) and abs(y * PITCH_W - 34) <= GOAL_HALF
+    players = []
+    for pl in sc.get("players", []):
+        px, py = pitch_point(view, float(pl["x"]), float(pl["y"]))
+        players.append({"side": pl["side"], "x": round(px, 3), "y": round(py, 3)})
+    return {"view": view, "pts": [[round(a, 3), round(b, 3)] for a, b in pts], "lens": [round(v, 3) for v in lens],
+            "cum": [round(sum(lens[:i]), 3) for i in range(len(lens))], "total": round(sum(lens), 3),
+            "players": players, "goal": [PITCH_L, 34.0] if view == "full" else [34.0, 0.0], "inGoal": in_goal,
+            "vb": list(viewbox or PITCH_VIEWBOX[view]), "focus": sc.get("focus", "ball"), "lead": lead}
+
+
+def pitch_lines() -> str:
+    """The markings of a 105 x 68 m pitch, length along x and width along y."""
+    c, L, dy = 34, PITCH_L, math.sqrt(9.15 ** 2 - 5.5 ** 2)
+
+    def r(x, y, w, h):
+        return f'<rect x="{x:g}" y="{y:.2f}" width="{w:g}" height="{h:.2f}"/>'
+    return "".join([
+        r(0, 0, L, PITCH_W), f'<line x1="52.5" y1="0" x2="52.5" y2="{PITCH_W:g}"/>', '<circle cx="52.5" cy="34" r="9.15"/>',
+        r(0, c - 20.16, 16.5, 40.32), r(L - 16.5, c - 20.16, 16.5, 40.32), r(0, c - 9.16, 5.5, 18.32),
+        r(L - 5.5, c - 9.16, 5.5, 18.32), r(-2, c - GOAL_HALF, 2, 2 * GOAL_HALF), r(L, c - GOAL_HALF, 2, 2 * GOAL_HALF),
+        f'<path d="M16.5 {c - dy:.2f}A9.15 9.15 0 0 1 16.5 {c + dy:.2f}"/>',
+        f'<path d="M{L - 16.5:g} {c - dy:.2f}A9.15 9.15 0 0 0 {L - 16.5:g} {c + dy:.2f}"/>',
+        '<path d="M1 0A1 1 0 0 1 0 1"/>', f'<path d="M{L - 1:g} 0A1 1 0 0 0 {L:g} 1"/>',
+        f'<path d="M0 {PITCH_W - 1:g}A1 1 0 0 1 1 {PITCH_W:g}"/>', f'<path d="M{L:g} {PITCH_W - 1:g}A1 1 0 0 0 {L - 1:g} {PITCH_W:g}"/>',
+    ])
+
+
+def pitch_svg(geo: dict) -> str:
+    """A dark xEdge pitch (not grass) with the players, the ball and its trail. The camera moves the "cam" group."""
+    turn = "" if geo["view"] == "full" else ' transform="matrix(0,-1,1,0,0,105)"'  # half: goal at the top
+    stripes = "".join(f'<rect class="s{k % 2}" x="{k * 5.25:g}" y="0" width="5.25" height="{PITCH_W:g}"/>' for k in range(20))
+    spots = "".join(f'<circle class="spot" cx="{x:g}" cy="34" r="0.32"/>' for x in (52.5, 11, 94))
+    net = f'<rect class="netfx" x="{PITCH_L:g}" y="{34 - GOAL_HALF:.2f}" width="2" height="{2 * GOAL_HALF:.2f}"/>'
+    d = "M" + "L".join(f"{x:.2f} {y:.2f}" for x, y in geo["pts"])
+    players = "".join(f'<circle class="{p["side"]}" cx="{p["x"]:.2f}" cy="{p["y"]:.2f}" r="1.25"/>' for p in geo["players"])
+    x0, y0 = geo["pts"][0]
+    vb = " ".join(f"{v:g}" for v in geo["vb"])
+    return (f'<svg class="fx-pitch" viewBox="{vb}" preserveAspectRatio="xMidYMax meet"><g class="cam">'
+            f'<g{turn}><g class="surf">{stripes}</g><g class="pl-lines">{pitch_lines()}</g>{spots}{net}</g>'
+            f'<path class="trail" d="{d}" stroke-dasharray="{geo["total"]:.3f} 9999" stroke-dashoffset="{geo["total"]:.3f}"/>'
+            f'<g class="pls">{players}</g><circle class="halo" cx="{x0:.2f}" cy="{y0:.2f}" r="2.6"/>'
+            f'<circle class="ball" cx="{x0:.2f}" cy="{y0:.2f}" r="0.85"/></g></svg>')
+
+
+def goal_face(gx: float, gy: float, gw: float) -> str:
+    """A goal seen from the front, gw pixels wide (7.32 m), its top-left inside corner at gx, gy, with a faint net."""
+    gh, post, step = gw * 2.44 / 7.32, gw * 0.12 / 7.32, gw / 14.64
+    net = "".join(f'<line x1="{gx + k * step:.1f}" y1="{gy:.1f}" x2="{gx + k * step:.1f}" y2="{gy + gh:.1f}"/>' for k in range(1, 15))
+    net += "".join(f'<line x1="{gx:.1f}" y1="{gy + k * step:.1f}" x2="{gx + gw:.1f}" y2="{gy + k * step:.1f}"/>'
+                   for k in range(1, int(gh / step) + 1))
+    return (f'<g class="net">{net}</g><rect class="netfx" x="{gx:.1f}" y="{gy:.1f}" width="{gw:.1f}" height="{gh:.1f}"/>'
+            f'<rect class="post" x="{gx - post:.1f}" y="{gy - post:.1f}" width="{post:.1f}" height="{gh + post:.1f}"/>'
+            f'<rect class="post" x="{gx + gw:.1f}" y="{gy - post:.1f}" width="{post:.1f}" height="{gh + post:.1f}"/>'
+            f'<rect class="post" x="{gx - post:.1f}" y="{gy - post:.1f}" width="{gw + 2 * post:.1f}" height="{post:.1f}"/>')
+
+
+def turf(top: float, bottom: float, width: float = 880, bands: int = 7) -> str:
+    """Mowing stripes in front of a goal, closer together towards the goal, for depth."""
+    ys = [top + (bottom - top) * (k / bands) ** 1.5 for k in range(bands + 1)]
+    return "".join(f'<rect class="s{k % 2}" x="0" y="{a:.1f}" width="{width:g}" height="{b - a:.1f}"/>'
+                   for k, (a, b) in enumerate(zip(ys, ys[1:])))
+
+
+def shots_svg(plan: dict) -> str:
+    gx, gy, gw, gh = GOAL_BOX
+    ox, oy = SHOT_FROM
+    shots = ""
+    for s in plan["list"]:
+        length = s["cl"][-1]
+        shots += (f'<g class="shot {"g" if s["goal"] else "m"}"><path class="tr" d="M{ox:g} {oy:g}Q{s["cx"]:g} {s["cy"]:g} '
+                  f'{s["ix"]:g} {s["iy"]:g}" stroke-dasharray="{length:.1f} 9999" stroke-dashoffset="{length:.1f}"/>'
+                  f'<circle class="mk" cx="{s["ix"]:g}" cy="{s["iy"]:g}" r="11"/>'
+                  f'<circle class="sb" cx="{ox:g}" cy="{oy:g}" r="24"/></g>')
+    return (f'<svg class="fx-goalsvg" viewBox="0 0 880 440" preserveAspectRatio="xMidYMax meet">'
+            f'<g class="turf">{turf(gy + gh, 440)}</g><line class="ground" x1="0" y1="{gy + gh:g}" x2="880" y2="{gy + gh:g}"/>'
+            f'{goal_face(gx, gy, gw)}<circle class="spot" cx="{ox:g}" cy="{oy + 24:g}" r="5"/><g class="shots">{shots}</g></svg>')
+
+
+HOOK_GOAL = {"gx": 200.0, "gy": 52.0, "gw": 480.0, "from": (262.0, 352.0), "to": (628.0, 96.0), "ctrl": (300.0, 70.0)}
+
+
+def hook_goal_svg() -> str:
+    g = HOOK_GOAL
+    (ox, oy), (cx, cy), (ix, iy) = g["from"], g["ctrl"], g["to"]
+    length = curve_lengths(g["from"], g["ctrl"], g["to"])[-1]
+    bottom = g["gy"] + g["gw"] * 2.44 / 7.32
+    return (f'<svg class="fx-goalsvg" viewBox="0 0 880 380" preserveAspectRatio="xMidYMax meet">'
+            f'<g class="turf">{turf(bottom, 380)}</g><line class="ground" x1="0" y1="{bottom:.1f}" x2="880" y2="{bottom:.1f}"/>'
+            f'{goal_face(g["gx"], g["gy"], g["gw"])}<g class="shot g"><path class="tr" d="M{ox:g} {oy:g}Q{cx:g} {cy:g} {ix:g} {iy:g}"'
+            f' stroke-dasharray="{length:.1f} 9999" stroke-dashoffset="{length:.1f}"/><circle class="sb" cx="{ox:g}" cy="{oy:g}" r="28"/></g></svg>')
 
 
 # ---------------------------------------------------------------- voice
@@ -513,6 +937,56 @@ def scene_html(i: int, sc: dict) -> str:
     kicker = f'<div class="kicker">{e(sc["kicker"].upper())}</div>' if sc.get("kicker") else ""
     if kind == "hook":
         inner = f'{kicker}<h1 class="fit" data-min="64">{rich_words(sc["title"])}</h1>'
+        if sc.get("visual") == "pitch":
+            geo = pitch_geometry(HOOK_PITCH, HOOK_PITCH_VIEWBOX)
+            inner += f'<div class="hvis" data-v="pitch"><div class="fx-tilt hook">{pitch_svg(geo)}</div></div>'
+        elif sc.get("visual") == "goal":
+            inner += f'<div class="hvis" data-v="goal">{hook_goal_svg()}</div>'
+    elif kind == "pitch_story":
+        geo = pitch_geometry(sc)
+        inner = (f'{kicker}<h2 class="fx-title fit" data-min="44">{rich_words(sc["title"])}</h2>'
+                 f'<div class="fx-stage"><div class="fx-tilt {geo["view"]}">{pitch_svg(geo)}</div>'
+                 '<div class="fx-tag"><span class="dot"></span>ILLUSTRATION</div></div>')
+    elif kind == "match_compare":
+        c = compare_numbers(sc)
+        ring = 2 * math.pi * 100
+        offers = "".join(
+            f'<div class="fx-offer"><div class="lab">{e(o["label"].upper())}</div>'
+            f'<div class="fx-odds"><span class="v wfit" data-min="40">{o["odds"]}</span></div>'
+            f'<div class="ringwrap"><svg viewBox="0 0 240 240"><circle class="trk" cx="120" cy="120" r="100"/>'
+            f'<circle class="arc" cx="120" cy="120" r="100" stroke-dasharray="{ring:.3f} 9999" stroke-dashoffset="{ring:.3f}"'
+            f' transform="rotate(-90 120 120)"/></svg><div class="pct"></div><div class="rcap">RAW IMPLIED</div></div></div>'
+            for o in c["offers"])
+        real = sc.get("source_status") == "real"
+        label = sc.get("match_label") or "Example match"
+        prov = ((f'SOURCE: {e(sc["source"].upper())} · {e(sc["date"])}' if real else "EXAMPLE PRICES") +
+                "<br>RAW IMPLIED = 100 ÷ ODDS · THE MARGIN IS STILL IN")
+        inner = (f'{kicker}<h2 class="fx-title fit" data-min="40">{rich_words(sc["title"])}</h2>'
+                 f'<div class="fx-strip">{MINI_PITCH}<span class="ml">{e(label.upper())}</span>'
+                 f'<span class="oc">{e(sc["outcome"].upper())}</span></div><div class="fx-offers"><svg class="bgp" viewBox="0 0 1040 420" preserveAspectRatio="none"><line x1="0" y1="210" x2="1040" y2="210"/><circle cx="520" cy="210" r="150"/><circle cx="520" cy="210" r="6"/><rect x="-200" y="40" width="1440" height="340"/></svg>{offers}</div>'
+                 f'<div class="fx-gap"><span class="br"></span><span class="gl">{c["gap"]["text"]} PERCENTAGE POINTS</span></div>'
+                 f'<div class="fx-prov">{prov}</div>')
+    elif kind == "probability_pitch":
+        plan = shot_plan(sc)
+        inner = (f'{kicker}<h2 class="fx-title fit" data-min="44">{rich_words(sc["title"])}</h2>'
+                 f'<div class="fx-stage pp">{shots_svg(plan)}<div class="fx-tag"><span class="dot"></span>'
+                 f'TOY EXAMPLE · {plan["pText"]} CHANCE PER SHOT · NOT REAL DATA</div></div>'
+                 '<div class="fx-count"><b class="g">0</b> <span class="gw">GOALS</span> FROM <b class="s">0</b> <span class="sw">SHOTS</span></div>'
+                 '<div class="fx-split"><div class="a"></div><div class="b"></div></div>'
+                 f'<div class="fx-splitlab"><span class="la">{plan["pText"]} GOAL</span><span class="lb">{plan["qText"]} NO GOAL</span></div>')
+    elif kind == "football_stat":
+        s, g = stat_numbers(sc), stat_grid(sc["denominator"])
+        cells = '<span class="fx-m"></span>' * s["den"]
+        if sc.get("source_status") == "real":
+            prov = (f'SOURCE: {e(sc["source"].upper())} · {e(sc["date"])}<br>{e(sc["competition"].upper())} · '
+                    f'{e(sc["window"].upper())}<br>{e(sc["definition"].upper())}')
+        else:
+            prov = "EXAMPLE · NOT REAL DATA"
+        inner = (f'{kicker}<h2 class="fx-title fit" data-min="44">{rich_words(sc["title"])}</h2>'
+                 f'<div class="fx-big wfit" data-min="110">{e(s["text"])}</div>'
+                 f'<div class="fx-of">{s["num"]} OF {s["den"]} {e(sc["of_what"].upper())}</div>'
+                 f'<div class="fx-grid" style="grid-template-columns:repeat({g["cols"]},{g["w"]:.1f}px);gap:{g["gap"]}px;'
+                 f'--mh:{g["h"]:.1f}px">{cells}</div><div class="fx-prov">{prov}</div>')
     elif kind == "text":
         body = f'<p class="body fit" data-min="30">{e(sc["body"])}</p>' if sc.get("body") else ""
         inner = f'{kicker}<h1 class="fit t2" data-min="54">{rich_words(sc["title"])}</h1>{body}'
@@ -557,6 +1031,8 @@ def scene_html(i: int, sc: dict) -> str:
         inner = (f'<img class="elogo" src="brand/xedge-logo-on-dark.svg" alt="xEdge"><h1 class="fit" data-min="56">{rich_words(sc["title"])}</h1>{body}'
                  '<div class="url">xedge.live</div><div class="esub">FREE MARGIN CHECKER · WAITLIST · UK ONLY</div>'
                  '<div class="ehelp">18+</div>')
+    if kind == "hook" and sc.get("visual"):
+        kind += " vis"
     return f'<section class="scene {kind}" id="s{i}">{inner}</section>'
 
 
@@ -646,6 +1122,74 @@ li div{font-size:52px;line-height:1.22;font-weight:500}
 #cap .ln{display:inline}
 #cap .cw{color:var(--faint)}
 #cap .cw.on{color:var(--chalk)}
+.scene.pitch_story,.scene.match_compare,.scene.probability_pitch,.scene.football_stat{justify-content:flex-start}
+.fx-title{font-weight:800;font-stretch:125%;font-size:64px;line-height:1.04;letter-spacing:-.01em}
+.fx-stage{position:relative;flex:1;min-height:0;margin-top:30px}
+.fx-tilt{position:absolute;inset:0;perspective:1600px;perspective-origin:50% 0}
+.fx-tilt svg{position:absolute;left:0;top:0;width:100%;height:100%;transform-origin:50% 100%;transform:rotateX(24deg)}
+.fx-tilt.full svg{transform:rotateX(18deg)}
+.fx-pitch .s0{fill:#121715}.fx-pitch .s1{fill:#0F1312}
+.fx-pitch .pl-lines{fill:none;stroke:rgba(243,245,239,.44);stroke-width:.3}
+.fx-pitch .spot{fill:rgba(243,245,239,.6)}
+.fx-pitch .netfx,.fx-goalsvg .netfx{fill:var(--volt);opacity:0}
+.fx-pitch .trail{fill:none;stroke:var(--volt);stroke-width:.6;stroke-linecap:round;stroke-linejoin:round}
+.fx-pitch .home{fill:var(--chalk);stroke:var(--pitch);stroke-width:.35}
+.fx-pitch .away{fill:var(--pitch);stroke:var(--stone);stroke-width:.55}
+.fx-pitch .ball{fill:#fff}.fx-pitch .halo{fill:var(--volt);opacity:.24}
+.fx-tag{position:absolute;left:0;top:0;display:flex;align-items:center;gap:12px;font-family:'Geist Mono';font-weight:500;font-size:24px;letter-spacing:.1em;color:var(--stone);white-space:nowrap}
+.fx-tag .dot{width:12px;height:12px;border-radius:50%;background:var(--volt);flex:none}
+.fx-goalsvg{position:absolute;inset:0;width:100%;height:100%}
+.fx-goalsvg .s0{fill:#111614}.fx-goalsvg .s1{fill:#0E1211}
+.fx-goalsvg .ground{stroke:rgba(243,245,239,.38);stroke-width:3}
+.fx-goalsvg .net line{stroke:rgba(243,245,239,.13);stroke-width:2}
+.fx-goalsvg .post{fill:var(--chalk)}
+.fx-goalsvg .spot{fill:rgba(243,245,239,.5)}
+.fx-goalsvg .tr{fill:none;stroke-width:6;stroke-linecap:round}
+.fx-goalsvg .shot.g .tr{stroke:var(--volt)}.fx-goalsvg .shot.m .tr{stroke:var(--stone)}
+.fx-goalsvg .sb{fill:#fff}
+.fx-goalsvg .shot.g .mk{fill:var(--volt)}.fx-goalsvg .shot.m .mk{fill:none;stroke:var(--stone);stroke-width:4}
+.fx-stage.pp .fx-tag{top:auto;bottom:-46px}
+.fx-count{margin-top:62px;font-family:'Geist Mono';font-weight:500;font-size:32px;letter-spacing:.06em;color:var(--stone)}
+.fx-count b{font-weight:500;color:var(--chalk)}
+.fx-split{position:relative;margin-top:22px;height:40px;border-radius:20px;background:var(--surface);border:2px solid var(--line);overflow:hidden}
+.fx-split .a{position:absolute;left:0;top:0;bottom:0;background:var(--volt)}
+.fx-split .b{position:absolute;right:0;top:0;bottom:0;background:var(--stone);opacity:.5}
+.fx-splitlab{display:flex;justify-content:space-between;margin-top:14px;font-family:'Geist Mono';font-weight:500;font-size:28px;letter-spacing:.06em}
+.fx-splitlab .la{color:var(--volt)}.fx-splitlab .lb{color:var(--stone)}
+.fx-strip{display:flex;align-items:center;gap:18px;margin-top:26px;height:76px;padding:0 24px;flex:none;background:var(--surface);border:2px solid var(--line);border-radius:22px;font-family:'Geist Mono';font-weight:500;font-size:25px;letter-spacing:.08em}
+.fx-strip .mini{width:60px;height:40px;flex:none;fill:none;stroke:rgba(243,245,239,.5);stroke-width:2}
+.fx-strip .ml{color:var(--chalk);white-space:nowrap}
+.fx-strip .oc{margin-left:auto;color:var(--volt);white-space:nowrap}
+.fx-offers{position:relative;display:flex;gap:24px;margin-top:26px}
+.fx-offers .bgp{position:absolute;left:-80px;right:-80px;top:-10px;height:420px;fill:none;stroke:rgba(243,245,239,.07);stroke-width:3}
+.fx-offer{position:relative}
+.fx-offer{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center}
+.fx-offer .lab{font-family:'Geist Mono';font-weight:500;font-size:24px;letter-spacing:.1em;color:var(--label);white-space:nowrap}
+.fx-odds{position:relative;width:100%;height:88px;margin-top:6px;display:flex;justify-content:center}
+.fx-odds .v{font-family:'Geist Mono';font-weight:500;font-size:80px;line-height:88px;white-space:nowrap}
+.ringwrap{position:relative;width:244px;height:244px;margin-top:12px}
+.ringwrap svg{position:absolute;inset:0;width:100%;height:100%}
+.ringwrap .trk{fill:none;stroke:var(--surface);stroke-width:16}
+.ringwrap .arc{fill:none;stroke:var(--chalk);stroke-width:16}
+.ringwrap .pct{position:absolute;left:0;right:0;top:84px;text-align:center;font-weight:800;font-stretch:105%;font-size:44px;line-height:1}
+.ringwrap .rcap{position:absolute;left:0;right:0;top:138px;text-align:center;font-family:'Geist Mono';font-weight:500;font-size:19px;letter-spacing:.08em;color:var(--label)}
+.fx-gap{position:relative;height:84px;margin-top:16px;flex:none}
+.fx-gap .br{position:absolute;top:0;width:0;height:24px;border:4px solid var(--volt);border-top:none;border-radius:0 0 10px 10px}
+.fx-gap .gl{position:absolute;left:0;top:38px;font-family:'Geist Mono';font-weight:500;font-size:30px;letter-spacing:.04em;color:var(--volt);white-space:nowrap}
+.fx-prov{margin-top:auto;font-family:'Geist Mono';font-weight:500;font-size:24px;letter-spacing:.06em;line-height:1.5;color:var(--label)}
+.fx-big{font-weight:800;font-stretch:112%;font-size:190px;line-height:.92;color:var(--volt);letter-spacing:-.03em;white-space:nowrap;align-self:flex-start;margin-top:22px}
+.fx-of{font-family:'Geist Mono';font-weight:500;font-size:32px;letter-spacing:.07em;margin-top:18px}
+.fx-grid{display:grid;margin-top:26px;flex:none}
+.fx-m{position:relative;height:var(--mh);border:2px solid rgba(243,245,239,.3);border-radius:5px}
+.fx-m::before{content:'';position:absolute;left:0;right:0;top:50%;border-top:2px solid rgba(243,245,239,.22)}
+.fx-m::after{content:'';position:absolute;left:50%;top:50%;width:36%;aspect-ratio:1;border:2px solid rgba(243,245,239,.22);border-radius:50%;transform:translate(-50%,-50%)}
+.fx-m.on{background:var(--volt);border-color:var(--volt)}
+.fx-m.on::before,.fx-m.on::after{border-color:rgba(12,14,13,.4)}
+.scene.hook.vis{justify-content:flex-start;padding-top:10px}
+.hook.vis h1{font-size:96px}
+.hvis{position:relative;flex:1;min-height:300px;margin-top:40px}
+.hvis .fx-tilt svg{transform:rotateX(38deg)}
+.hvis>.fx-goalsvg{transform-origin:50% 60%}
 """
 
 JS = r"""
@@ -666,6 +1210,57 @@ const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelect
 function rise(el,k,dy=30){ if(!el) return; el.style.opacity=k; el.style.transform=`translateY(${(1-k)*dy}px)`; }
 function fmt(n,k){ return n.pre+(n.num*k).toFixed(n.dec)+n.suf; }
 function beat(sc,i,fallback){ const b=sc.beats[i]; return (b===undefined||b===null)?fallback:b; }
+// ---- football scenes. Everything is worked out from t alone (no clocks, no randomness), so any frame can be
+// rendered on its own and comes out the same every time.
+function segPlan(g,beats,start0,end){
+  // When each pass starts and how long it takes: {n} beats start passes; otherwise each follows the last.
+  // The ball always arrives (and a goal shows) before the scene moves on: late passes are quicker.
+  const n=g.lens.length, st=[], du=[]; let prev=start0;
+  for(let i=0;i<n;i++){ const b=beats[i]; const s=(b===undefined||b===null)?prev:b; st.push(s); du.push(clamp(0.35+g.lens[i]/38,0.45,1.6)); prev=s+du[i]; }
+  for(let i=0;i<n-1;i++){ if(st[i+1]<st[i]+du[i]) du[i]=Math.max(0.25,st[i+1]-st[i]); }
+  if(end!==undefined){ const room=end-0.75-st[n-1]; if(du[n-1]>room) du[n-1]=Math.max(0.3,room); }
+  return {st,du};
+}
+// A kicked ball slows at a steady rate, so it travels on a quadratic ease-out: it leaves the foot at twice its
+// average speed and rolls to a stop, with no jump.
+const KICK=x=>{ const v=1-clamp(x); return 1-v*v; };
+function ballAt(g,pl,t){
+  for(let i=g.lens.length-1;i>=0;i--){ if(t>=pl.st[i]){ const u=KICK((t-pl.st[i])/pl.du[i]), a=g.pts[i], b=g.pts[i+1];
+    return [a[0]+(b[0]-a[0])*u, a[1]+(b[1]-a[1])*u, g.cum[i]+g.lens[i]*u]; } }
+  return [g.pts[0][0], g.pts[0][1], 0];
+}
+function pitchFrame(g,root,t,beats,t0,t1){
+  const pl=segPlan(g,beats,t0+g.lead,t1), b=ballAt(g,pl,t);
+  for(const c of [$('.ball',root),$('.halo',root)]){ c.setAttribute('cx',b[0].toFixed(3)); c.setAttribute('cy',b[1].toFixed(3)); }
+  $('.trail',root).style.strokeDashoffset=Math.max(0,g.total-b[2]).toFixed(3);
+  // Camera on the pitch only (never the captions or the 18+): a slow push-in that follows the ball, or the goal.
+  const dur=Math.max(1.5,t1-t0), vb=g.vb, mx=vb[0]+vb[2]/2, my=vb[1]+vb[3]/2;
+  const zoom=u=>1+0.14*ES(P(u,t0,dur)), inside=(x,y,z)=>[clamp(x,vb[0]+vb[2]/(2*z),vb[0]+vb[2]-vb[2]/(2*z)),
+                                                        clamp(y,vb[1]+vb[3]/(2*z),vb[1]+vb[3]-vb[3]/(2*z))];
+  let s=1, cx=mx, cy=my;
+  if(g.focus==='ball'){
+    // The camera trails the ball by about a third of a second: the average of eight recent framings, each kept
+    // inside the pitch, so it eases in and out of every move and never shows past the drawing's edge.
+    s=zoom(t); cx=0; cy=0;
+    for(let k=0;k<8;k++){ const u=t-k*0.1, q=ballAt(g,pl,u), c=inside(q[0],q[1],zoom(u)); cx+=c[0]/8; cy+=c[1]/8; }
+  } else if(g.focus==='goal'){ const k=ES(P(t,t0,dur)); s=1+0.14*k; [cx,cy]=inside(mx+(g.goal[0]-mx)*k,my+(g.goal[1]-my)*k,s); }
+  $('.cam',root).setAttribute('transform',`translate(${mx.toFixed(3)} ${my.toFixed(3)}) scale(${s.toFixed(5)}) translate(${(-cx).toFixed(3)} ${(-cy).toFixed(3)})`);
+  $$('.pls circle',root).forEach((c,i)=>{ c.style.opacity=g.lead<0.2?1:EO(P(t,t0+0.08+i*0.025,0.3)).toFixed(4); });
+  const nf=$('.netfx',root), last=g.lens.length-1, arr=pl.st[last]+pl.du[last];
+  nf.style.opacity=g.inGoal?(0.18*P(t,arr-0.05,0.15)+0.5*Math.sin(Math.PI*P(t,arr-0.05,0.7))).toFixed(4):0;
+}
+function curveAt(o,c,i,u){ const v=1-u; return [v*v*o[0]+2*v*u*c[0]+u*u*i[0], v*v*o[1]+2*v*u*c[1]+u*u*i[1]]; }
+function lenAt(cl,u){ const x=u*(cl.length-1), k=Math.min(cl.length-2,Math.floor(x)); return cl[k]+(cl[k+1]-cl[k])*(x-k); }
+const HV={
+  // The hook's football picture: in place from the first frame, already moving.
+  pitch(sc,hv,t){ pitchFrame(sc.geo,hv,t,[],sc.t0,sc.t1); },  // its camera keeps pushing in after the pass
+  goal(sc,hv,t){
+    const x=P(t,sc.t0+0.03,1.7), h=sc.hv, u=0.93*(1-(1-x)*(1-x)), p=curveAt(h.from,h.ctrl,h.to,u), ball=$('.sb',hv);
+    const z=1+0.05*ES(P(t,sc.t0,Math.max(1.5,sc.t1-sc.t0))); $('svg',hv).style.transform=`scale(${z.toFixed(5)})`;
+    ball.setAttribute('cx',p[0].toFixed(2)); ball.setAttribute('cy',p[1].toFixed(2)); ball.setAttribute('r',(28-15*u).toFixed(2));
+    $('.tr',hv).style.strokeDashoffset=(h.cl[h.cl.length-1]-lenAt(h.cl,u)).toFixed(2);
+  },
+};
 const U = {
   hook(sc,el,t){
     // Fast entrance: words start at once and the whole title is in by about 0.6 s,
@@ -673,6 +1268,69 @@ const U = {
     rise($('.kicker',el),EO(P(t,sc.t0,0.35)),20);
     $$('.w',el).forEach((w,i)=>rise(w,EO(P(t,sc.t0+i*0.04,0.38)),56));
     const h=$('h1',el); if(h){ h.style.transformOrigin='left center'; h.style.transform=`scale(${1+0.035*ES(P(t,sc.t0,Math.max(0.5,sc.t1-sc.t0)))})`; }
+    const hv=$('.hvis',el); if(hv) HV[hv.dataset.v](sc,hv,t);
+  },
+  pitch_story(sc,el,t){
+    rise($('.kicker',el),EO(P(t,sc.t0,0.45)),20);
+    rise($('.fx-title',el),EO(P(t,sc.t0+0.05,0.5)),28);
+    const st=$('.fx-stage',el), k=EO(P(t,sc.t0+0.08,0.6));
+    st.style.opacity=k; st.style.transform=`translateY(${((1-k)*30).toFixed(2)}px)`;
+    pitchFrame(sc.geo,el,t,sc.beats,sc.t0,sc.t1);
+  },
+  match_compare(sc,el,t){
+    rise($('.kicker',el),EO(P(t,sc.t0,0.45)),20);
+    rise($('.fx-title',el),EO(P(t,sc.t0+0.05,0.5)),28);
+    rise($('.fx-strip',el),EO(P(t,sc.t0+0.15,0.5)),20);
+    const cols=$$('.fx-offer',el), n=cols.length; let last=sc.t0;
+    cols.forEach((c,i)=>{ const tin=beat(sc,i,sc.t0+0.4+i*0.35); last=tin; const k=EO(P(t,tin-0.08,0.45));
+      c.style.opacity=k; c.style.transform=`translateY(${((1-k)*44).toFixed(2)}px)`; });
+    const tc=beat(sc,n,last+0.9), C=2*Math.PI*100;
+    cols.forEach((c,i)=>{
+      const o=sc.offers[i], g=ES(P(t,tc+i*0.15,1.0));
+      $('.arc',c).style.strokeDashoffset=(C*(1-o.raw/100*g)).toFixed(3);
+      const pct=$('.pct',c); pct.textContent=g>=1?o.rawText:(o.raw*g).toFixed(1)+'%';  // lands exactly on the worked-out figure
+      pct.style.opacity=EO(P(t,tc-0.05,0.3)); $('.rcap',c).style.opacity=EO(P(t,tc+0.1,0.4));
+    });
+    const tg=beat(sc,n+1,tc+1.6), k=EO(P(t,tg,0.55));
+    const a=cols[sc.gap.hi], b=cols[sc.gap.lo], xa=a.offsetLeft+a.offsetWidth/2, xb=b.offsetLeft+b.offsetWidth/2;
+    const x0=Math.min(xa,xb), w=Math.abs(xa-xb), br=$('.fx-gap .br',el), gl=$('.fx-gap .gl',el);
+    br.style.left=(x0+w*(1-k)/2).toFixed(2)+'px'; br.style.width=(w*k).toFixed(2)+'px'; br.style.opacity=k>0?1:0;
+    gl.style.left=clamp(x0+w/2-gl.offsetWidth/2,0,el.clientWidth-gl.offsetWidth).toFixed(2)+'px'; rise(gl,EO(P(t,tg+0.2,0.45)),12);
+    rise($('.fx-prov',el),EO(P(t,sc.t0+0.5,0.45)),10);
+  },
+  probability_pitch(sc,el,t){
+    rise($('.kicker',el),EO(P(t,sc.t0,0.45)),20);
+    rise($('.fx-title',el),EO(P(t,sc.t0+0.05,0.5)),28);
+    const st=$('.fx-stage',el); st.style.opacity=EO(P(t,sc.t0+0.08,0.55));
+    const S=sc.shots, n=S.list.length, start=beat(sc,0,sc.t0+0.8), sum=beat(sc,1,null);
+    const sp=clamp(((sum!==null?sum-0.3:sc.t1-1.4)-start-0.55)/n,0.2,0.5);
+    let goals=0, landed=0;
+    $$('.shot',el).forEach((g,i)=>{
+      const s=S.list[i], ts=start+i*sp, u=P(t,ts,0.55), e=KICK(u), ball=$('.sb',g), tr=$('.tr',g), mk=$('.mk',g);
+      const L=s.cl[s.cl.length-1], p=curveAt(S.from,[s.cx,s.cy],[s.ix,s.iy],e);
+      ball.style.opacity=(t>=ts&&u<1)?1:0; ball.setAttribute('cx',p[0].toFixed(2)); ball.setAttribute('cy',p[1].toFixed(2)); ball.setAttribute('r',(24-13*e).toFixed(2));
+      tr.style.strokeDashoffset=(L-lenAt(s.cl,e)).toFixed(2);
+      tr.style.opacity=t<ts?0:(u<1?0.95:(0.95-(0.95-(s.goal?0.3:0.1))*EO(P(t,ts+0.55,0.6)))).toFixed(4);
+      const m=EO(P(t,ts+0.5,0.25)); mk.style.opacity=m; mk.setAttribute('r',(11*(0.6+0.4*m)).toFixed(2));
+      if(t>=ts+0.55){ landed++; if(s.goal) goals++; }
+    });
+    $('.fx-count .g',el).textContent=goals; $('.fx-count .s',el).textContent=landed;
+    $('.fx-count .gw',el).textContent=goals===1?'GOAL':'GOALS'; $('.fx-count .sw',el).textContent=landed===1?'SHOT':'SHOTS';
+    const tsum=sum!==null?sum:start+n*sp+0.8, ka=ES(P(t,tsum,0.8)), kb=ES(P(t,tsum+0.25,0.8));
+    $('.fx-split .a',el).style.width=(S.p*100*ka).toFixed(3)+'%'; $('.fx-split .b',el).style.width=((1-S.p)*100*kb).toFixed(3)+'%';
+    rise($('.fx-splitlab .la',el),EO(P(t,tsum+0.1,0.4)),12); rise($('.fx-splitlab .lb',el),EO(P(t,tsum+0.35,0.4)),12);
+  },
+  football_stat(sc,el,t){
+    rise($('.kicker',el),EO(P(t,sc.t0,0.45)),20);
+    rise($('.fx-title',el),EO(P(t,sc.t0+0.05,0.5)),28);
+    const big=$('.fx-big',el), s=sc.stat, k=EO(P(t,sc.t0+0.1,0.5)), g=ES(P(t,sc.t0+0.1,0.9));
+    big.style.opacity=k; big.style.transform=`scale(${(0.9+0.1*k).toFixed(4)})`; big.style.transformOrigin='0 70%';
+    big.textContent=g>=1?s.text:(s.pct*g).toFixed(s.dec)+'%';
+    const t1=beat(sc,0,sc.t0+0.8), ms=$$('.fx-m',el), stag=Math.min(0.04,0.9/ms.length);
+    ms.forEach((m,i)=>{ const a=EO(P(t,t1+i*stag,0.3)); m.style.opacity=a; m.style.transform=`translateY(${((1-a)*14).toFixed(2)}px)`; });
+    const t2=beat(sc,1,t1+Math.max(0.9,ms.length*stag+0.4)), stag2=Math.min(0.08,0.9/Math.max(1,s.num));
+    ms.forEach((m,i)=>m.classList.toggle('on',i<s.num && t>=t2+i*stag2));
+    rise($('.fx-of',el),EO(P(t,t1,0.45)),16); rise($('.fx-prov',el),EO(P(t,t1+0.3,0.45)),10);
   },
   text(sc,el,t){
     rise($('.kicker',el),EO(P(t,sc.t0,0.5)),20);
@@ -815,7 +1473,7 @@ function fit(){
       if(!changed) break;
     }
     if(el.scrollHeight>el.clientHeight+1) bad.push(`scene ${i+1} is too tall`);
-    for(const x of $$('*',el)){ if(x.closest('.bar')) continue; const r=x.getBoundingClientRect(); if(r.width && (r.right>80+880+2 || r.left<80-2)) { bad.push(`scene ${i+1}: "${(x.textContent||'').slice(0,30)}" runs off the side`); break; } }
+    for(const x of $$('*',el)){ if(x.closest('.bar, svg')) continue; const r=x.getBoundingClientRect(); if(r.width && (r.right>80+880+2 || r.left<80-2)) { bad.push(`scene ${i+1}: "${(x.textContent||'').slice(0,30)}" runs off the side`); break; } }
     el.style.visibility='hidden';
   });
   return bad;
@@ -905,6 +1563,19 @@ def build_timeline(spec: dict, work: pathlib.Path, preview: bool) -> dict:
         if sc["type"] == "checker":
             entry["odds"] = [str(o) for o in sc["odds"]]
             entry["marginNum"] = num_parts(sc["_checker"]["margin"])
+        if sc["type"] == "hook" and sc.get("visual") == "pitch":
+            entry["geo"] = pitch_geometry(HOOK_PITCH, HOOK_PITCH_VIEWBOX, lead=0.05)
+        if sc["type"] == "hook" and sc.get("visual") == "goal":
+            entry["hv"] = {"from": list(HOOK_GOAL["from"]), "ctrl": list(HOOK_GOAL["ctrl"]), "to": list(HOOK_GOAL["to"]),
+                           "cl": curve_lengths(HOOK_GOAL["from"], HOOK_GOAL["ctrl"], HOOK_GOAL["to"])}
+        if sc["type"] == "pitch_story":
+            entry["geo"] = pitch_geometry(sc)
+        if sc["type"] == "match_compare":
+            entry.update(compare_numbers(sc))
+        if sc["type"] == "probability_pitch":
+            entry["shots"] = shot_plan(sc)
+        if sc["type"] == "football_stat":
+            entry["stat"] = stat_numbers(sc)
     hook = timeline[0]
     n_words = len(re.findall(r"\S+", plain(scenes[0]["title"])))
     cover_t = min(total - 0.1, hook["t0"] + 0.04 * n_words + 0.6)
