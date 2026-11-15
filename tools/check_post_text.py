@@ -5,7 +5,8 @@ Usage:
     python3 tools/check_post_text.py posts.json
 
 posts.json is a list of posts, each {"id": "...", "channel": "x" | "instagram" | "facebook" |
-"tiktok", "text": "...", "needs_18": true or false}. Put each post of a thread in as its own
+"youtube", "text": "...", "needs_18": true or false}. For a YouTube Short, the text is its
+description (TikTok stopped on 15 Nov 2026 and is no longer a channel here). Put each post of a thread in as its own
 entry. For every post it prints one line of JSON with its problems and warnings, and it exits
 with status 1 if any post has a problem.
 
@@ -16,7 +17,7 @@ Problems, which stop a post going out as written:
   helpline stays in the bios and on the website, and is off the cards and video frames since 22 Oct 2026);
 - a square bracket, which usually means a [placeholder] was never filled in;
 - no "18+" where needs_18 is true, an empty text, or more characters than the channel allows
-  (2,200 on Instagram and TikTok; 280 on X, counted X's way: every link as 23 characters and
+  (2,200 on Instagram; 5,000 on YouTube; 280 on X, counted X's way: every link as 23 characters and
   most characters outside Latin, Greek and Cyrillic, emoji included, as 2).
 
 Warnings are words that are fine in context, such as "guaranteed" used to warn readers off a
@@ -34,7 +35,7 @@ import re
 import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
-LIMITS = {"x": 280, "instagram": 2200, "tiktok": 2200, "facebook": 63206}
+LIMITS = {"x": 280, "instagram": 2200, "youtube": 5000, "facebook": 63206}
 TEXT_RULES = [
     (r"0808|gambling help|national gambling helpline|gamcare|gambleaware",
      "gives the helpline, which captions leave out since 13 Oct 2026"),

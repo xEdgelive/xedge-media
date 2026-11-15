@@ -295,7 +295,7 @@ def check(d: dict) -> tuple:
             problems.append("caption must be text")
         else:
             if len(cap) > 2200:
-                problems.append("caption is over 2,200 characters, TikTok's and Instagram's limit")
+                problems.append("caption is over 2,200 characters, Instagram's limit")
             if "18+" not in cap:
                 problems.append("caption must say 18+")
             text = cap.lower().replace("’", "'").replace("‘", "'")
@@ -1602,7 +1602,7 @@ def build_track(clips: list, total: float, out: pathlib.Path) -> None:
 
 # ---------------------------------------------------------------- render
 
-LOUDNESS = "I=-14:TP=-1.5:LRA=11"  # -14 LUFS, the level TikTok, Reels and Shorts play voice at
+LOUDNESS = "I=-14:TP=-1.5:LRA=11"  # -14 LUFS, the level Reels and Shorts play voice at
 
 
 def loudnorm_filter(audio: pathlib.Path) -> str:
